@@ -94,14 +94,4 @@ class WidgetService {
     final streak = profile?.currentStreak ?? 0;
     await syncFromCardsAndStreak(cards: cards, streak: streak);
   }
-
-  /// Checks if app was launched by tapping the Home Screen Widget
-  static Future<Uri?> getLaunchUri() async {
-    try {
-      return await HomeWidget.initiallyLaunchedFromHomeWidget();
-    } catch (e) {
-      debugPrint('WidgetService.getLaunchUri error: $e');
-      return null;
-    }
-  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/ai_scan_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/services/widget_service.dart';
 import '../../providers/auth_provider.dart';
@@ -11,9 +12,9 @@ import '../../providers/cards_provider.dart';
 import '../../providers/stats_provider.dart';
 import '../../providers/study_provider.dart';
 import '../../providers/quiz_provider.dart';
-import '../../providers/duel_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/auth_screen.dart';
+import '../decks/ai_scan_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -182,7 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen>
               context.read<StatsProvider>().clear();
               context.read<StudyProvider>().clear();
               context.read<QuizProvider>().clear();
-              context.read<DuelProvider>().clear();
               await context.read<AuthProvider>().signOut();
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -229,7 +229,6 @@ class _ProfileScreenState extends State<ProfileScreen>
               context.read<StatsProvider>().clear();
               context.read<StudyProvider>().clear();
               context.read<QuizProvider>().clear();
-              context.read<DuelProvider>().clear();
               await context.read<AuthProvider>().deleteAccount();
               if (mounted) {
                 Navigator.of(context).pushAndRemoveUntil(
@@ -450,6 +449,165 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  Future<void> _showApiKeyDialog(BuildContext context) async {
+    final groqKey = await AiScanService.instance.getGroqApiKey();
+    final geminiKey = await AiScanService.instance.getGeminiApiKey();
+    final activeProvider = await AiScanService.instance.getActiveProvider();
+
+    final groqController = TextEditingController(text: groqKey);
+    final geminiController = TextEditingController(text: geminiKey);
+    AiProvider selectedProvider = activeProvider;
+
+    if (!context.mounted) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.bolt_rounded, color: Color(0xFFF59E0B), size: 26),
+                SizedBox(width: 8),
+                Text('AI Vision Sozlamalari'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkSecondary : AppColors.lightSecondary,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setDialogState(() => selectedProvider = AiProvider.groq),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selectedProvider == AiProvider.groq
+                                    ? (isDark ? AppColors.brandDark : Colors.white)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.bolt_rounded, size: 16, color: Color(0xFFF59E0B)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Groq (Tezkor)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: selectedProvider == AiProvider.groq
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => setDialogState(() => selectedProvider = AiProvider.gemini),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selectedProvider == AiProvider.gemini
+                                    ? (isDark ? AppColors.brandDark : Colors.white)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                'Gemini',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: selectedProvider == AiProvider.gemini
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (selectedProvider == AiProvider.groq) ...[
+                    const Text(
+                      '⚡ Groq LPU (qwen/qwen3.8-27b) modeli orqali rasmni o\'ta tezkor va aqlli tahlil qiladi.\n\nKalitni console.groq.com/keys dan bepul olishingiz mumkin:',
+                      style: TextStyle(fontSize: 12.5, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: groqController,
+                      decoration: const InputDecoration(
+                        labelText: 'Groq API Key (gsk_...)',
+                        hintText: 'gsk_...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ] else ...[
+                    const Text(
+                      'Google Gemini Vision API kaliti (aistudio.google.com):',
+                      style: TextStyle(fontSize: 12.5, height: 1.4),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: geminiController,
+                      decoration: const InputDecoration(
+                        labelText: 'Gemini API Key (AIzaSy...)',
+                        hintText: 'AIzaSy...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Bekor qilish'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  await AiScanService.instance.saveGroqApiKey(groqController.text.trim());
+                  await AiScanService.instance.saveGeminiApiKey(geminiController.text.trim());
+                  await AiScanService.instance.setActiveProvider(selectedProvider);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('AI sozlamalari muvaffaqiyatli saqlandi! ⚡'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Saqlash'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -549,7 +707,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Foydalanuvchi ID — Battle uchun',
+                                  'Foydalanuvchi ID',
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: .72),
                                     fontSize: 11,
@@ -1061,6 +1219,158 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ],
                   ),
                 ),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // AI Vision & Gemini API Card
+            Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AiScanScreen(),
+                        ),
+                      );
+                    },
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.auto_awesome_rounded,
+                              color: Color(0xFF7C3AED),
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      'AI Vision Skaner',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: isDark
+                                            ? AppColors.darkText
+                                            : AppColors.lightText,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF7C3AED).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'YANGI',
+                                        style: TextStyle(
+                                          color: Color(0xFF7C3AED),
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Kitob va lug\'at daftar rasmidan to\'plam yaratish',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.lightTextMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                  InkWell(
+                    onTap: () => _showApiKeyDialog(context),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.bolt_rounded,
+                            size: 20,
+                            color: Color(0xFFF59E0B),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Groq & AI Vision sozlamalari',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? AppColors.darkText
+                                    : AppColors.lightText,
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            Icons.tune_rounded,
+                            size: 18,
+                            color: AppColors.lightTextMuted,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 14),

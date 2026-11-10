@@ -14,6 +14,7 @@ import '../../widgets/skeleton/app_skeleton.dart';
 import '../study/study_screen.dart';
 import '../quiz/quiz_setup_screen.dart';
 import 'card_form_screen.dart';
+import 'ai_scan_screen.dart';
 import '../../widgets/custom_study_modal.dart';
 
 class DeckDetailScreen extends StatefulWidget {
@@ -205,6 +206,18 @@ class _DeckDetailScreenState extends State<DeckDetailScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.document_scanner_rounded, color: AppColors.accent),
+            tooltip: 'Rasmdan so\'z qo\'shish (AI Scan)',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AiScanScreen(targetDeckId: widget.deckId),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.tune_rounded),
             tooltip: 'Moslashuvchan mashq (Random / Oraliq)',

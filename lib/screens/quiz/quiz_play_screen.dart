@@ -25,6 +25,8 @@ class QuizPlayScreen extends StatefulWidget {
 }
 
 class _QuizPlayScreenState extends State<QuizPlayScreen> {
+  bool _hasNavigatedToResults = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,19 +45,23 @@ class _QuizPlayScreenState extends State<QuizPlayScreen> {
     final quiz = context.watch<QuizProvider>();
 
     if (quiz.isQuizFinished) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => QuizResultsScreen(
-              deck: widget.deck,
-              cards: widget.cards,
-              direction: widget.direction,
-              results: quiz.results,
+      if (!_hasNavigatedToResults) {
+        _hasNavigatedToResults = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => QuizResultsScreen(
+                deck: widget.deck,
+                cards: widget.cards,
+                direction: widget.direction,
+                results: quiz.results,
+              ),
             ),
-          ),
-        );
-      });
+          );
+        });
+      }
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 

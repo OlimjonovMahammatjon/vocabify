@@ -66,17 +66,16 @@ Tayyorlangan App Bundle fayli loyiha asosiy papkasida ham tayyorlab qo'yilgan:
   > Asosiy imkoniyatlar:
   > • Ilmiy asoslangan SM-2 interval takrorlash (Spaced Repetition) tizimi;
   > • 📱 Telefon bosh ekrani uchun interaktiv Vidjet (Kun so'zi va takrorlash);
-  > • ⚔️ Real vaqtda boshqa foydalanuvchilar bilan 1v1 "So'z jangi" (Word Battle);
   > • 3D flip kartochkalar va talaffuzni eshitish (TTS);
   > • Yozma mashqlar (Typing mode) va interaktiv testlar (Quiz);
   > • Kunlik o'rganish statistikasi, qiyin so'zlar tahlili va streak hisobi;
   > • To'liq oflayn ishlash va internet paydo bo'lganda avtomatik sinxronlash;
-  > • Excel/CSV yoki matndan so'zlarni ommaviy import qilish.
+  > • JSON yoki matndan so'zlarni ommaviy import qilish.
 
 ### B. Grafik aktivlar (Graphics Assets — `play_store_assets/` papkasida tayyor):
 1. **Ilova belgisi (App Icon):** `play_store_assets/app_icon_512x512.png` (512 x 512 px PNG).
 2. **Asosiy reklama banneri (Feature Graphic):** `play_store_assets/feature_graphic_1024x500.jpg` (1024 x 500 px ultra-premium banner).
-3. **Skrinshotlar (Phone Screenshots):** Telefoningizda olingan 4-6 ta skrinshot (Bosh sahifa, Kartalar, Word Battle, Statistika).
+3. **Skrinshotlar (Phone Screenshots):** Telefoningizda olingan 4-6 ta skrinshot (Bosh sahifa, Kartalar, Testlar, Statistika).
 
 ### C. Maxfiylik siyosati (Privacy Policy):
 Play Console'da `App content` -> `Privacy policy` bo'limiga [PRIVACY_POLICY.md](./PRIVACY_POLICY.md) ning GitHub xomaki (raw) havolasini kiriting:

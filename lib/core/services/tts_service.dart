@@ -14,7 +14,6 @@ class TtsService {
   int _sequenceId = 0;
 
   final ValueNotifier<bool> isPlayingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<int> currentIndexNotifier = ValueNotifier<int>(-1);
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -50,7 +49,6 @@ class TtsService {
     _sequenceId++;
     _isPlayingSequence = false;
     isPlayingNotifier.value = false;
-    currentIndexNotifier.value = -1;
     try {
       await _tts.stop();
     } catch (e) {
@@ -74,7 +72,6 @@ class TtsService {
     for (int i = 0; i < words.length; i++) {
       if (!_isPlayingSequence || _sequenceId != currentId) break;
 
-      currentIndexNotifier.value = i;
       onIndexChanged(i);
 
       final item = words[i];
@@ -110,7 +107,6 @@ class TtsService {
     if (_isPlayingSequence && _sequenceId == currentId) {
       _isPlayingSequence = false;
       isPlayingNotifier.value = false;
-      currentIndexNotifier.value = -1;
       onCompleted();
     }
   }

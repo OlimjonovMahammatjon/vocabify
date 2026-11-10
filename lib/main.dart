@@ -18,7 +18,6 @@ import 'providers/cards_provider.dart';
 import 'providers/study_provider.dart';
 import 'providers/quiz_provider.dart';
 import 'providers/stats_provider.dart';
-import 'providers/duel_provider.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/main_navigation_screen.dart';
@@ -57,7 +56,6 @@ Widget buildVocabifyApp({required Future<void> coreInitialization}) {
       ChangeNotifierProvider(create: (_) => StudyProvider()),
       ChangeNotifierProvider(create: (_) => QuizProvider()),
       ChangeNotifierProvider(create: (_) => StatsProvider()),
-      ChangeNotifierProvider(create: (_) => DuelProvider()),
     ],
     child: const VocabifyApp(),
   );

@@ -10,6 +10,7 @@ import '../../core/utils/srs.dart';
 import '../../core/utils/helpers.dart';
 import '../../models/card_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cards_provider.dart';
 import '../../providers/study_provider.dart';
 import '../../providers/stats_provider.dart';
 
@@ -1221,6 +1222,16 @@ class _StudyScreenState extends State<StudyScreen>
                           final uid = context.read<AuthProvider>().user?.id;
                           if (uid != null) {
                             context.read<StatsProvider>().loadStats(
+                                  uid,
+                                  force: true,
+                                );
+                            if (widget.deckId != null) {
+                              context.read<CardsProvider>().loadCardsForDeck(
+                                    widget.deckId!,
+                                    force: true,
+                                  );
+                            }
+                            context.read<CardsProvider>().loadAllCards(
                                   uid,
                                   force: true,
                                 );

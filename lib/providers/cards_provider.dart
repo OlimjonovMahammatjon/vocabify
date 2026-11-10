@@ -397,21 +397,4 @@ class CardsProvider extends ChangeNotifier {
       return rows.length;
     }
   }
-
-  /// AI helper to fetch pronunciation, translation, example sentence for a word
-  Future<Map<String, dynamic>?> generateWordInfoWithAI(String word) async {
-    try {
-      final res = await SupabaseService.client.functions.invoke(
-        'ai-card-helper',
-        body: {'word': word.trim()},
-      );
-
-      if (res.status == 200 && res.data != null) {
-        return Map<String, dynamic>.from(res.data as Map);
-      }
-    } catch (e) {
-      debugPrint('Supabase AI helper error: $e');
-    }
-    return null;
-  }
 }

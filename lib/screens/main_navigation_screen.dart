@@ -11,7 +11,6 @@ import 'home/home_screen.dart';
 import 'decks/decks_screen.dart';
 import 'stats/stats_screen.dart';
 import 'profile/profile_screen.dart';
-import 'battle/battle_hub_screen.dart';
 
 class MainNavigationScreen extends StatefulWidget {
   final int initialIndex;
@@ -23,7 +22,7 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   late int _currentIndex;
-  final List<Widget?> _screens = List<Widget?>.filled(5, null);
+  final List<Widget?> _screens = List<Widget?>.filled(4, null);
 
   @override
   void initState() {
@@ -53,8 +52,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget _buildScreen(int index) => switch (index) {
     0 => const HomeScreen(),
     1 => const DecksScreen(),
-    2 => const BattleHubScreen(),
-    3 => const StatsScreen(),
+    2 => const StatsScreen(),
     _ => const ProfileScreen(),
   };
 
@@ -94,9 +92,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               children: [
                 _buildNavItem(0, Icons.home_rounded, 'Bosh sahifa'),
                 _buildNavItem(1, Icons.auto_stories_rounded, 'To\'plam'),
-                _buildNavItem(2, Icons.sports_martial_arts_rounded, 'Battle'),
-                _buildNavItem(3, Icons.bar_chart_rounded, 'Statistika'),
-                _buildNavItem(4, Icons.person_rounded, 'Profil'),
+                _buildNavItem(2, Icons.bar_chart_rounded, 'Statistika'),
+                _buildNavItem(3, Icons.person_rounded, 'Profil'),
               ],
             ),
           ),

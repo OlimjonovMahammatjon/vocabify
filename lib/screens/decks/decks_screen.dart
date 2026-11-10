@@ -11,6 +11,7 @@ import '../../widgets/skeleton/app_skeleton.dart';
 import '../../widgets/custom_study_modal.dart';
 import '../bulk_import/bulk_import_screen.dart';
 import 'deck_detail_screen.dart';
+import 'ai_scan_screen.dart';
 
 class DecksScreen extends StatefulWidget {
   final bool openCreateModalOnInit;
@@ -278,6 +279,16 @@ class _DecksScreenState extends State<DecksScreen>
         title: const Text('To\'plamlar'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.document_scanner_rounded, color: AppColors.accent),
+            tooltip: 'Rasmdan so\'zlar (AI Scan)',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiScanScreen()),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.shuffle_rounded),
             tooltip: 'Aralash sinov',
             onPressed: allCards.isNotEmpty
@@ -352,6 +363,25 @@ class _DecksScreenState extends State<DecksScreen>
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AiScanScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.auto_awesome_rounded, size: 18, color: AppColors.accent),
+                      label: const Text('Rasmdan so\'zlar (AI Scan)'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -366,22 +396,103 @@ class _DecksScreenState extends State<DecksScreen>
               },
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
-                itemCount: decks.length + (allCards.isNotEmpty ? 1 : 0),
+                itemCount: decks.length + 1 + (allCards.isNotEmpty ? 1 : 0),
                 separatorBuilder: (context, index) =>
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _buildAiScanBanner(context, isDark);
+                  }
                   if (allCards.isNotEmpty) {
-                    if (index == 0) {
+                    if (index == 1) {
                       return _buildGlobalMixBanner(context, allCards, isDark);
                     }
-                    final deck = decks[index - 1];
+                    final deck = decks[index - 2];
                     return _buildDeckCard(context, deck);
                   }
-                  final deck = decks[index];
+                  final deck = decks[index - 1];
                   return _buildDeckCard(context, deck);
                 },
               ),
             ),
+    );
+  }
+
+  Widget _buildAiScanBanner(BuildContext context, bool isDark) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AiScanScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF1E3A5F), const Color(0xFF14243B)]
+                : [AppColors.brand, const Color(0xFF283B60)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.brand.withValues(alpha: isDark ? 0.3 : 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Color(0xFFFF9E0B),
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'AI orqali rasmdan to\'plam',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Kitobdagi belgilangan yoki daftardagi so\'zlarni oling',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white70,
+              size: 14,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

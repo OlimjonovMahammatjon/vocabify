@@ -19,5 +19,4 @@ class SupabaseService {
   // Helpers
   static User? get currentUser => client.auth.currentUser;
   static Session? get currentSession => client.auth.currentSession;
-  static bool get isAuthenticated => currentUser != null;
 }

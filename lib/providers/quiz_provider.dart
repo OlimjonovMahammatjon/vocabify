@@ -41,7 +41,6 @@ class QuizProvider extends ChangeNotifier {
   String? _selectedAnswer;
   bool _isAnswered = false;
   int _timeLeft = 30;
-  bool _isSubmitting = false;
   final List<QuizResultItem> _results = [];
 
   Timer? _timer;
@@ -54,7 +53,6 @@ class QuizProvider extends ChangeNotifier {
   String? get selectedAnswer => _selectedAnswer;
   bool get isAnswered => _isAnswered;
   int get timeLeft => _timeLeft;
-  bool get isSubmitting => _isSubmitting;
   List<QuizResultItem> get results => _results;
 
   QuizQuestion? get currentQuestion =>
@@ -65,12 +63,6 @@ class QuizProvider extends ChangeNotifier {
   bool get isQuizFinished =>
       _questions.isNotEmpty && _currentIndex >= _questions.length;
 
-  int get correctCount => _results.where((r) => r.isCorrect).length;
-  int get wrongCount => _results.length - correctCount;
-  int get scorePercentage => _results.isNotEmpty
-      ? ((correctCount / _results.length) * 100).round()
-      : 0;
-
   void clear() {
     _timer?.cancel();
     _advanceTimer?.cancel();
@@ -80,7 +72,6 @@ class QuizProvider extends ChangeNotifier {
     _currentIndex = 0;
     _selectedAnswer = null;
     _isAnswered = false;
-    _isSubmitting = false;
     notifyListeners();
   }
 
@@ -198,7 +189,6 @@ class QuizProvider extends ChangeNotifier {
 
   Future<void> _finishQuiz() async {
     _timer?.cancel();
-    _isSubmitting = true;
     notifyListeners();
 
     final userId = SupabaseService.currentUser?.id;
@@ -247,7 +237,6 @@ class QuizProvider extends ChangeNotifier {
       OfflineQueueService.instance.flushQueue();
     }
 
-    _isSubmitting = false;
     _currentIndex = _questions.length; // Mark finished
     notifyListeners();
   }

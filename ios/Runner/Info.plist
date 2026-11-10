@@ -47,6 +47,10 @@
 			</array>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Kitob yoki daftardagi notanish so'zlarni rasmga tushirib lug'at yaratish uchun kamera ruxsati kerak.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Belgilangan so'zlar bor rasmlarni yuklab lug'atga aylantirish uchun galereya ruxsati kerak.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

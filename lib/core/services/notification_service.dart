@@ -29,9 +29,6 @@ class NotificationService {
   int _minute = 0;
 
   bool get isEnabled => _enabled;
-  int get reminderHour => _hour;
-  int get reminderMinute => _minute;
-
   TimeOfDay get reminderTime => TimeOfDay(hour: _hour, minute: _minute);
 
   final ValueNotifier<bool> enabledNotifier = ValueNotifier<bool>(false);

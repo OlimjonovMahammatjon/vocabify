@@ -156,7 +156,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Container(
                   width: 110,
                   height: 110,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: isDark ? const Color(0xFF1E293B) : Colors.white,
                     borderRadius: BorderRadius.circular(28),
@@ -171,22 +171,18 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.asset(
-                      'assets/images/vocabifylogo.png',
+                  child: Image.asset(
+                    'assets/images/vocabifylogo.png',
+                    fit: BoxFit.contain,
+                    cacheWidth: 384,
+                    errorBuilder: (context, error, stackTrace) => Image.asset(
+                      'assets/images/app_icon.png',
                       fit: BoxFit.contain,
                       cacheWidth: 384,
-                      errorBuilder: (context, error, stackTrace) => Image.asset(
-                        'assets/images/app_icon.png',
-                        fit: BoxFit.contain,
-                        cacheWidth: 384,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const Icon(
-                              Icons.menu_book_rounded,
-                              size: 56,
-                              color: AppColors.brand,
-                            ),
+                      errorBuilder: (context, error, stackTrace) => const Icon(
+                        Icons.menu_book_rounded,
+                        size: 56,
+                        color: AppColors.brand,
                       ),
                     ),
                   ),

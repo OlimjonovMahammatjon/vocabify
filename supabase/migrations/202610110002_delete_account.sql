@@ -15,7 +15,7 @@ begin
   end if;
 
   -- Delete from auth.users. Foreign key constraints with ON DELETE CASCADE
-  -- will automatically remove profiles, decks, cards, reviews, duels, and answers.
+  -- will automatically remove profiles, decks, cards, and reviews.
   delete from auth.users where id = v_user_id;
 end;
 $$;

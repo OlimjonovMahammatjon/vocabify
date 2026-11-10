@@ -11,7 +11,6 @@ import '../models/profile_model.dart';
 class AuthProvider extends ChangeNotifier {
   final Future<void> _coreInitialization;
   User? _user;
-  Session? _session;
   ProfileModel? _profile;
   bool _isLoading = true;
   bool _isDisposed = false;
@@ -19,7 +18,6 @@ class AuthProvider extends ChangeNotifier {
   int _authGeneration = 0;
 
   User? get user => _user;
-  Session? get session => _session;
   ProfileModel? get profile => _profile;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _user != null;
@@ -41,7 +39,6 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
     if (_isDisposed) return;
-    _session = SupabaseService.currentSession;
     _user = SupabaseService.currentUser;
     CacheService.instance.activateUser(_user?.id);
     await OfflineQueueService.instance.activateUser(_user?.id);
@@ -65,7 +62,6 @@ class AuthProvider extends ChangeNotifier {
     ) async {
       final generation = ++_authGeneration;
       final session = data.session;
-      _session = session;
       _user = session?.user;
       CacheService.instance.activateUser(_user?.id);
       await OfflineQueueService.instance.activateUser(_user?.id);
@@ -126,7 +122,6 @@ class AuthProvider extends ChangeNotifier {
         password: password.trim(),
       );
 
-      _session = res.session;
       _user = res.user;
       CacheService.instance.activateUser(_user?.id);
       await OfflineQueueService.instance.activateUser(_user?.id);
@@ -158,7 +153,6 @@ class AuthProvider extends ChangeNotifier {
         },
       );
 
-      _session = res.session;
       _user = res.user;
       CacheService.instance.activateUser(_user?.id);
       await OfflineQueueService.instance.activateUser(_user?.id);
@@ -190,7 +184,6 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       await CacheService.instance.clearUserCache(userId: signingOutUserId);
       _user = null;
-      _session = null;
       _profile = null;
       CacheService.instance.activateUser(null);
       await OfflineQueueService.instance.activateUser(null);
@@ -224,7 +217,6 @@ class AuthProvider extends ChangeNotifier {
       } catch (_) {}
       await CacheService.instance.clearUserCache(userId: deletingUserId);
       _user = null;
-      _session = null;
       _profile = null;
       CacheService.instance.activateUser(null);
       await OfflineQueueService.instance.activateUser(null);

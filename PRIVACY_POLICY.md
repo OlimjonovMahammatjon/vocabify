@@ -17,8 +17,7 @@ Vocabify ilovasi foydalanuvchilarga qulay va xavfsiz xizmat ko'rsatish maqsadida
 
 2. **O'quv va Faoliyat Ma'lumotlari:**
    - Foydalanuvchi yaratgan yoki import qilgan so'z to'plamlari (Decks) va kartalari (Cards);
-   - Interval takrorlash (SM-2) natijalari, reytinglar, kunlik maqsadlar va o'rganish statistikasi (Streak);
-   - Onlayn "So'z jangi" (Word Battle) natijalari va ochkolari.
+   - Interval takrorlash (SM-2) natijalari, reytinglar, kunlik maqsadlar va o'rganish statistikasi (Streak).
 
 3. **Qurilma va Ilova Sozlamalari:**
    - Ilova mavzusi (Light/Dark mode);

@@ -49,29 +49,22 @@ Vocabify PWA ilovasining to'liq 1:1 formatda Flutterda yaratilgan zamonaviy mobi
 - O'zlashtirish bosqichlari (Yangi, O'rganilmoqda, Mustahkam)
 - Baholash taqsimoti (Yana, Qiyin, Yaxshi, Oson)
 
-### 7. ⚔️ Asinxron Word Battle
-- Bir xil 10 ta savol bilan 24 soatlik 1v1 duel
-- Har savolga 10 soniya va tezlikka bog'liq 0–1000 ball
-- Javoblar faqat serverdagi Supabase RPC orqali tekshiriladi
-- Raqibni aniq email yoki profil ekranidagi foydalanuvchi ID orqali topish
-- Your Turn, Pending va Finished holatlari hamda ochiq challenge'lar
-
-### 8. 📦 JSON Import & Export
+### 7. 📦 JSON Import & Export
 - Ko'p so'zlarni bir vaqtda JSON orqali yuklash
 - `.json` fayllarni to'g'ridan-to'g'ri yuklash
 - Haqiqiy vaqtda JSON tekshiruvi va so'zlarni oldindan ko'rish
 - To'plamdagi barcha so'zlarni `.json` formatda eksport qilish va ulashish (Share)
 
-### 9. ⚡ Offline-First & Outbox Queue
+### 8. ⚡ Offline-First & Outbox Queue
 - Internet uzilganda ham barcha amallar (so'z qo'shish, o'chirish, takrorlash natijalari) kechiktirmasdan bajariladi
 - Kutilayotgan amallar local outbox navbatiga saqlanadi
 - Aloqa tiklanganda barcha ma'lumotlar fonda avtomatik sinxronizatsiya qilinadi
 
-### 10. 🎨 UI/UX & Dizayn
+### 9. 🎨 UI/UX & Dizayn
 - Navy brend ranglar palitrasi (`#1e2d4a` / `#4f75b3`)
 - Google Fonts (Inter) zamonaviy tipografiyasi
 - Tungi (Dark) va Yorug' (Light) mavzularni qo'llab-quvvatlash
-- Yumshoq soyalar, burchaklar va 5 ta qulay bo'limli Bottom Navigation Bar
+- Yumshoq soyalar, burchaklar va 4 ta qulay bo'limli Bottom Navigation Bar
 
 ---
 
@@ -107,10 +100,7 @@ Vocabify app/
 │   │   ├── cards_provider.dart
 │   │   ├── study_provider.dart
 │   │   ├── quiz_provider.dart
-│   │   ├── stats_provider.dart
-│   │   └── duel_provider.dart
-│   ├── repositories/
-│   │   └── duel_repository.dart
+│   │   └── stats_provider.dart
 │   └── screens/
 │       ├── auth/
 │       │   └── auth_screen.dart
@@ -131,10 +121,6 @@ Vocabify app/
 │       │   └── stats_screen.dart
 │       ├── profile/
 │       │   └── profile_screen.dart
-│       ├── battle/
-│       │   ├── battle_hub_screen.dart
-│       │   ├── word_battle_screen.dart
-│       │   └── word_battle_result_screen.dart
 │       └── bulk_import/
 │           └── bulk_import_screen.dart
 ├── assets/
