@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../constants/app_constants.dart';
 
 class ExtractedWordItem {
@@ -23,12 +26,24 @@ class ExtractedWordItem {
   });
 
   factory ExtractedWordItem.fromJson(Map<String, dynamic> json) {
+    final rawPronunciation = json['pronunciation']?.toString().trim();
+    final rawDefinition = json['definition']?.toString().trim();
+    final rawExample =
+        (json['example'] ?? json['example_sentence'])?.toString().trim();
+
     return ExtractedWordItem(
-      word: (json['word'] as String? ?? '').trim(),
-      translation: (json['translation'] as String? ?? '').trim(),
-      pronunciation: json['pronunciation'] as String?,
-      definition: json['definition'] as String?,
-      example: (json['example'] ?? json['example_sentence']) as String?,
+      word: (json['word'] ?? '').toString().trim(),
+      translation: (json['translation'] ?? '').toString().trim(),
+      pronunciation:
+          rawPronunciation != null && rawPronunciation.isNotEmpty
+              ? rawPronunciation
+              : null,
+      definition:
+          rawDefinition != null && rawDefinition.isNotEmpty
+              ? rawDefinition
+              : null,
+      example:
+          rawExample != null && rawExample.isNotEmpty ? rawExample : null,
       isSelected: true,
     );
   }
@@ -52,7 +67,7 @@ class AiScanResult {
     required this.suggestedDeckName,
     required this.words,
     this.providerName = 'Groq AI',
-    this.modelName = 'qwen/qwen3.8-27b',
+    this.modelName = AiScanService.defaultGroqVisionModel,
   });
 }
 
@@ -67,6 +82,13 @@ enum AiProvider {
   gemini, // Google Gemini Vision (Alternative)
 }
 
+class _ModelResponse {
+  final String text;
+  final String modelName;
+
+  const _ModelResponse({required this.text, required this.modelName});
+}
+
 class AiScanService {
   AiScanService._();
   static final AiScanService instance = AiScanService._();
@@ -75,14 +97,30 @@ class AiScanService {
   static const String _userGeminiApiKeyPref = 'vocabify_user_gemini_api_key';
   static const String _activeProviderPref = 'vocabify_active_ai_provider';
 
-  // Primary production vision model on Groq
+  // Vision models on Groq (primary + multimodal fallbacks)
   static const String defaultGroqVisionModel = 'qwen/qwen3.8-27b';
   static const List<String> fallbackGroqModels = [
     'qwen/qwen3.8-27b',
+    'meta-llama/llama-4-maverick-17b-128e-instruct',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
     'meta-models/muse-spark-open',
   ];
 
-  /// Returns user-configured Groq key or AppConstants default
+  // Fast text models on Groq for single-word translation & example generation
+  static const List<String> textGroqModels = [
+    'llama-3.3-70b-versatile',
+    'qwen/qwen3-32b',
+    'qwen/qwen3.8-27b',
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+  ];
+
+  // Active Google Gemini models (v1beta)
+  static const List<String> geminiModels = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+  ];
+
+  /// Returns user-configured Groq key or AppConstants default.
   Future<String> getGroqApiKey() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -103,7 +141,7 @@ class AiScanService {
     }
   }
 
-  /// Returns user-configured Gemini key or AppConstants default
+  /// Returns user-configured Gemini key or AppConstants default.
   Future<String> getGeminiApiKey() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -152,7 +190,63 @@ class AiScanService {
     return gemini.isNotEmpty;
   }
 
-  /// Scans image using Groq (primary ultra-fast vision model) or Gemini fallback
+  /// Generates Uzbek translation and a natural English example sentence for a word.
+  Future<ExtractedWordItem> generateWordDetails({
+    required String word,
+    AiProvider? preferredProvider,
+  }) async {
+    final cleanWord = word.trim();
+    if (cleanWord.isEmpty) {
+      throw Exception('Avval so\'zni kiriting.');
+    }
+
+    final systemPrompt = '''
+Siz ingliz tili va o'zbek tili bo'yicha tajribali leksikograf va o'qituvchisiz.
+Foydalanuvchi kiritgan inglizcha so'z yoki ibora uchun aniq o'zbekcha tarjima va tabiiy inglizcha misol gap tuzing.
+
+Javobni FAQAT toza JSON formatida qaytaring (boshqa hech qanday matnsiz):
+{
+  "word": "kiritilgan so'zning to'g'ri shakli",
+  "translation": "o'zbek tilidagi eng aniq va tushunarli tarjimasi (1-3 ta mos ma'no)",
+  "pronunciation": "/xalqaro fonetik transkripsiya/",
+  "definition": "inglizcha qisqa izoh",
+  "example": "Shu so'z ishlatilgan hayotiy, tabiiy va tushunarli inglizcha misol gap."
+}
+''';
+
+    final userPrompt = 'So\'z yoki ibora: "$cleanWord"';
+
+    return _executeWithProviderFallback<ExtractedWordItem>(
+      preferredProvider: preferredProvider,
+      runGroq: (apiKey) async {
+        final res = await _postGroqChat(
+          apiKey: apiKey,
+          models: textGroqModels,
+          messages: [
+            {'role': 'system', 'content': systemPrompt},
+            {'role': 'user', 'content': userPrompt},
+          ],
+          temperature: 0.2,
+          maxCompletionTokens: 512,
+          timeout: const Duration(seconds: 25),
+        );
+        return parseWordDetailsJson(res.text, fallbackWord: cleanWord);
+      },
+      runGemini: (apiKey) async {
+        final res = await _postGeminiGenerate(
+          apiKey: apiKey,
+          parts: [
+            {'text': '$systemPrompt\n$userPrompt'},
+          ],
+          temperature: 0.2,
+          timeout: const Duration(seconds: 25),
+        );
+        return parseWordDetailsJson(res.text, fallbackWord: cleanWord);
+      },
+    );
+  }
+
+  /// Scans image using Groq or Gemini with symmetric automatic fallback.
   Future<AiScanResult> scanImage({
     required File imageFile,
     ScanFocusMode focusMode = ScanFocusMode.highlighted,
@@ -167,89 +261,80 @@ class AiScanService {
     final base64Image = base64Encode(bytes);
     final mimeType = _resolveMimeType(imageFile.path);
 
+    return _executeWithProviderFallback<AiScanResult>(
+      preferredProvider: preferredProvider,
+      runGroq: (apiKey) => _scanWithGroq(
+        apiKey: apiKey,
+        base64Image: base64Image,
+        mimeType: mimeType,
+        focusMode: focusMode,
+        extraInstructions: extraInstructions,
+      ),
+      runGemini: (apiKey) => _scanWithGemini(
+        apiKey: apiKey,
+        base64Image: base64Image,
+        mimeType: mimeType,
+        focusMode: focusMode,
+        extraInstructions: extraInstructions,
+      ),
+    );
+  }
+
+  Future<T> _executeWithProviderFallback<T>({
+    AiProvider? preferredProvider,
+    required Future<T> Function(String apiKey) runGroq,
+    required Future<T> Function(String apiKey) runGemini,
+  }) async {
     final provider = preferredProvider ?? await getActiveProvider();
     final groqKey = await getGroqApiKey();
     final geminiKey = await getGeminiApiKey();
 
-    // If Groq selected or default, try Groq first
-    if (provider == AiProvider.groq) {
-      if (groqKey.isNotEmpty) {
-        try {
-          return await _scanWithGroq(
-            apiKey: groqKey,
-            base64Image: base64Image,
-            mimeType: mimeType,
-            focusMode: focusMode,
-            extraInstructions: extraInstructions,
-          );
-        } catch (groqError) {
-          debugPrint('Groq vision failed: $groqError');
-          // If Gemini key is available, automatically try Gemini fallback
-          if (geminiKey.isNotEmpty) {
-            debugPrint('Attempting Gemini fallback...');
-            return await _scanWithGemini(
-              apiKey: geminiKey,
-              base64Image: base64Image,
-              mimeType: mimeType,
-              focusMode: focusMode,
-              extraInstructions: extraInstructions,
-            );
+    if (groqKey.isEmpty && geminiKey.isEmpty) {
+      throw Exception(
+        'AI API kaliti topilmadi. Iltimos, sozlamalarda Groq yoki Gemini API kalitingizni kiriting.',
+      );
+    }
+
+    final primaryIsGroq = provider == AiProvider.groq;
+    final primaryKey = primaryIsGroq ? groqKey : geminiKey;
+    final secondaryKey = primaryIsGroq ? geminiKey : groqKey;
+    final runPrimary = primaryIsGroq ? runGroq : runGemini;
+    final runSecondary = primaryIsGroq ? runGemini : runGroq;
+
+    if (primaryKey.isNotEmpty) {
+      try {
+        return await runPrimary(primaryKey);
+      } catch (primaryError) {
+        debugPrint('Primary AI provider failed: $primaryError');
+        if (secondaryKey.isNotEmpty) {
+          debugPrint('Attempting fallback AI provider...');
+          try {
+            return await runSecondary(secondaryKey);
+          } catch (secondaryError) {
+            debugPrint('Fallback AI provider failed: $secondaryError');
+            rethrow;
           }
-          rethrow;
         }
-      } else if (geminiKey.isNotEmpty) {
-        // Fallback to Gemini if only Gemini key is configured
-        return await _scanWithGemini(
-          apiKey: geminiKey,
-          base64Image: base64Image,
-          mimeType: mimeType,
-          focusMode: focusMode,
-          extraInstructions: extraInstructions,
-        );
-      } else {
-        throw Exception(
-          'Groq API kaliti topilmadi. Iltimos, sozlamalarda Groq API kalitingizni kiriting (console.groq.com/keys dan bepul olinadi).',
-        );
-      }
-    } else {
-      // User explicitly selected Gemini
-      if (geminiKey.isNotEmpty) {
-        return await _scanWithGemini(
-          apiKey: geminiKey,
-          base64Image: base64Image,
-          mimeType: mimeType,
-          focusMode: focusMode,
-          extraInstructions: extraInstructions,
-        );
-      } else if (groqKey.isNotEmpty) {
-        return await _scanWithGroq(
-          apiKey: groqKey,
-          base64Image: base64Image,
-          mimeType: mimeType,
-          focusMode: focusMode,
-          extraInstructions: extraInstructions,
-        );
-      } else {
-        throw Exception(
-          'Gemini API kaliti topilmadi. Iltimos, sozlamalarda API kalitingizni kiriting.',
-        );
+        rethrow;
       }
     }
+
+    return await runSecondary(secondaryKey);
   }
 
-  /// Ultra-fast & smart multimodal vision via Groq LPU
-  Future<AiScanResult> _scanWithGroq({
-    required String apiKey,
-    required String base64Image,
-    required String mimeType,
+  String _buildVisionPrompt({
     required ScanFocusMode focusMode,
     String? extraInstructions,
-  }) async {
+  }) {
     final focusPrompt = _buildFocusPrompt(focusMode);
-    final systemPrompt = '''
+    final extra =
+        extraInstructions != null && extraInstructions.trim().isNotEmpty
+            ? "\nFoydalanuvchi qo'shimcha ko'rsatmasi: ${extraInstructions.trim()}"
+            : '';
+
+    return '''
 Siz ingliz tili va o'zbek tili bo'yicha kuchli, tajribali o'qituvchi hamda yuqori aniqlikdagi Optical Character Recognition (OCR) mutaxassisisiz.
-$focusPrompt
-${extraInstructions != null && extraInstructions.trim().isNotEmpty ? "Foydalanuvchi qo'shimcha ko'rsatmasi: $extraInstructions" : ""}
+$focusPrompt$extra
 
 Rasmdagi har bir topilgan so'z uchun quyidagilarni aniqlang:
 - word: so'zning o'zi (inglizcha boshlang'ich shaklda)
@@ -272,15 +357,28 @@ Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring (hech qanday qo
   ]
 }
 ''';
+  }
 
-    final userInstruction =
+  /// Ultra-fast & smart multimodal vision via Groq LPU.
+  Future<AiScanResult> _scanWithGroq({
+    required String apiKey,
+    required String base64Image,
+    required String mimeType,
+    required ScanFocusMode focusMode,
+    String? extraInstructions,
+  }) async {
+    final systemPrompt = _buildVisionPrompt(
+      focusMode: focusMode,
+      extraInstructions: extraInstructions,
+    );
+    const userInstruction =
         'Ushbu rasmni diqqat bilan o\'rganing va so\'zlarni ajratib, belgilangan JSON formatida qaytaring.';
-
     final imageUrl = 'data:$mimeType;base64,$base64Image';
 
-    final requestPayload = {
-      'model': defaultGroqVisionModel,
-      'messages': [
+    final res = await _postGroqChat(
+      apiKey: apiKey,
+      models: fallbackGroqModels,
+      messages: [
         {'role': 'system', 'content': systemPrompt},
         {
           'role': 'user',
@@ -293,69 +391,21 @@ Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring (hech qanday qo
           ],
         },
       ],
-      'temperature': 0.1,
-      'response_format': {'type': 'json_object'},
-    };
+      temperature: 0.1,
+      maxCompletionTokens: 4096,
+      timeout: const Duration(seconds: 45),
+    );
 
-    http.Response? response;
-    String? lastError;
-    String usedModel = defaultGroqVisionModel;
-
-    for (final model in fallbackGroqModels) {
-      usedModel = model;
-      requestPayload['model'] = model;
-
-      try {
-        final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
-        response = await http
-            .post(
-              url,
-              headers: {
-                'Authorization': 'Bearer $apiKey',
-                'Content-Type': 'application/json',
-              },
-              body: jsonEncode(requestPayload),
-            )
-            .timeout(const Duration(seconds: 45));
-
-        if (response.statusCode == 200) {
-          break;
-        } else {
-          lastError = 'Groq (${response.statusCode}): ${response.body}';
-        }
-      } catch (e) {
-        lastError = 'Groq xatosi: $e';
-      }
-    }
-
-    if (response == null || response.statusCode != 200) {
-      throw Exception(
-        'Groq AI tahlilida xatolik: ${lastError ?? "Server javob bermadi"}',
-      );
-    }
-
-    final resJson = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final choices = resJson['choices'] as List?;
-    if (choices == null || choices.isEmpty) {
-      throw Exception('Groq AI javob qaytarmadi.');
-    }
-
-    final message = choices[0]['message'] as Map<String, dynamic>?;
-    final rawText = (message?['content'] as String? ?? '').trim();
-    if (rawText.isEmpty) {
-      throw Exception('AI bo\'sh javob qaytardi.');
-    }
-
-    final parsedWords = _parseJsonResponse(rawText);
+    final parsedWords = parseScanJsonResponse(res.text);
     return AiScanResult(
       suggestedDeckName: parsedWords.suggestedDeckName,
       words: parsedWords.words,
       providerName: 'Groq LPU AI',
-      modelName: usedModel,
+      modelName: res.modelName,
     );
   }
 
-  /// Google Gemini Vision (Alternative / Fallback)
+  /// Google Gemini Vision (Alternative / Fallback).
   Future<AiScanResult> _scanWithGemini({
     required String apiKey,
     required String base64Image,
@@ -363,106 +413,261 @@ Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring (hech qanday qo
     required ScanFocusMode focusMode,
     String? extraInstructions,
   }) async {
-    final focusPrompt = _buildFocusPrompt(focusMode);
-    final prompt = '''
-Siz ingliz tili va o'zbek tili bo'yicha tajribali o'qituvchisiz.
-$focusPrompt
-${extraInstructions != null && extraInstructions.trim().isNotEmpty ? "Foydalanuvchi qo'shimcha ko'rsatmasi: $extraInstructions" : ""}
+    final prompt = _buildVisionPrompt(
+      focusMode: focusMode,
+      extraInstructions: extraInstructions,
+    );
 
-Har bir topilgan so'z uchun quyidagilarni aniqlang:
-- word: so'zning o'zi (inglizcha boshlang'ich shaklda)
-- translation: o'zbek tilidagi aniq tarjimasi
-- pronunciation: xalqaro fonetik transkripsiyasi (IPA)
-- definition: inglizcha qisqa tushuntirish
-- example: shu so'z ishlatilgan hayotiy va foydali inglizcha misol gap
-
-Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring:
-{
-  "deck_name": "Tavsiya etilgan to'plam nomi",
-  "words": [
-    {
-      "word": "example",
-      "translation": "misol",
-      "pronunciation": "/ɪɡˈzɑːm.pəl/",
-      "definition": "A representative form or pattern",
-      "example": "This is a good example of modern architecture."
-    }
-  ]
-}
-''';
-
-    final body = jsonEncode({
-      'contents': [
+    final res = await _postGeminiGenerate(
+      apiKey: apiKey,
+      parts: [
+        {'text': prompt},
         {
-          'parts': [
-            {'text': prompt},
-            {
-              'inline_data': {
-                'mime_type': mimeType,
-                'data': base64Image,
-              },
-            },
-          ],
+          'inline_data': {
+            'mime_type': mimeType,
+            'data': base64Image,
+          },
         },
       ],
-      'generationConfig': {
-        'temperature': 0.2,
-        'response_mime_type': 'application/json',
-      },
-    });
+      temperature: 0.2,
+      timeout: const Duration(seconds: 45),
+    );
 
-    final models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
-    http.Response? response;
-    String? lastError;
-    String usedModel = models.first;
-
-    for (final model in models) {
-      usedModel = model;
-      try {
-        final url = Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey',
-        );
-        response = await http
-            .post(
-              url,
-              headers: {'Content-Type': 'application/json'},
-              body: body,
-            )
-            .timeout(const Duration(seconds: 40));
-
-        if (response.statusCode == 200) {
-          break;
-        } else {
-          lastError = 'Status ${response.statusCode}: ${response.body}';
-        }
-      } catch (e) {
-        lastError = e.toString();
-      }
-    }
-
-    if (response == null || response.statusCode != 200) {
-      throw Exception(
-        'Gemini AI bilan bog\'lanishda xatolik yuz berdi: ${lastError ?? 'Noma\'lum xatolik'}',
-      );
-    }
-
-    final resJson = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-    final candidates = resJson['candidates'] as List?;
-    if (candidates == null || candidates.isEmpty) {
-      throw Exception('AI javob qaytarmadi.');
-    }
-
-    final content = candidates[0]['content'];
-    final parts = content['parts'] as List;
-    final rawText = (parts[0]['text'] as String).trim();
-
-    final parsedWords = _parseJsonResponse(rawText);
+    final parsedWords = parseScanJsonResponse(res.text);
     return AiScanResult(
       suggestedDeckName: parsedWords.suggestedDeckName,
       words: parsedWords.words,
       providerName: 'Gemini AI',
-      modelName: usedModel,
+      modelName: res.modelName,
     );
+  }
+
+  Future<_ModelResponse> _postGroqChat({
+    required String apiKey,
+    required List<String> models,
+    required List<Map<String, dynamic>> messages,
+    required double temperature,
+    required int maxCompletionTokens,
+    required Duration timeout,
+  }) async {
+    final url = Uri.parse('https://api.groq.com/openai/v1/chat/completions');
+    String? lastError;
+
+    for (final model in models) {
+      for (final useJsonMode in [true, false]) {
+        final payload = <String, dynamic>{
+          'model': model,
+          'messages': messages,
+          'temperature': temperature,
+          'max_completion_tokens': maxCompletionTokens,
+          if (useJsonMode) 'response_format': {'type': 'json_object'},
+        };
+
+        try {
+          final response = await http
+              .post(
+                url,
+                headers: {
+                  'Authorization': 'Bearer $apiKey',
+                  'Content-Type': 'application/json',
+                },
+                body: jsonEncode(payload),
+              )
+              .timeout(timeout);
+
+          if (response.statusCode == 200) {
+            final resJson =
+                jsonDecode(utf8.decode(response.bodyBytes))
+                    as Map<String, dynamic>;
+            final choices = resJson['choices'] as List?;
+            if (choices == null || choices.isEmpty) {
+              lastError = 'Groq AI ($model) bo\'sh javob qaytardi.';
+              break;
+            }
+            final message = choices[0]['message'] as Map<String, dynamic>?;
+            final rawText = (message?['content'] as String? ?? '').trim();
+            if (rawText.isEmpty) {
+              lastError = 'Groq AI ($model) bo\'sh matn qaytardi.';
+              break;
+            }
+            return _ModelResponse(text: rawText, modelName: model);
+          }
+
+          if (response.statusCode == 401 || response.statusCode == 403) {
+            throw Exception(
+              'Groq API kaliti noto\'g\'ri yoki faol emas. Iltimos, sozlamalarda kalitni tekshiring.',
+            );
+          }
+
+          if (response.statusCode == 413) {
+            throw Exception(
+              'Rasm hajmi Groq chegarasidan katta. Kichikroq yoki kesilgan rasm tanlang.',
+            );
+          }
+
+          final bodyText = utf8.decode(response.bodyBytes, allowMalformed: true);
+          lastError = _extractApiErrorMessage(
+            statusCode: response.statusCode,
+            body: bodyText,
+            providerLabel: 'Groq',
+          );
+
+          // Retry same model without strict json_object if the model/request rejects it.
+          if (useJsonMode &&
+              response.statusCode == 400 &&
+              (bodyText.contains('json_validate_failed') ||
+                  bodyText.contains('response_format'))) {
+            continue;
+          }
+
+          break;
+        } on TimeoutException {
+          lastError = 'Groq serveri ($model) belgilangan vaqtda javob bermadi.';
+          break;
+        } on SocketException {
+          throw Exception('Internet aloqasini tekshiring.');
+        } catch (e) {
+          if (e is Exception &&
+              (e.toString().contains('API kaliti') ||
+                  e.toString().contains('Rasm hajmi') ||
+                  e.toString().contains('Internet aloqasini'))) {
+            rethrow;
+          }
+          lastError = 'Groq xatosi ($model): $e';
+          break;
+        }
+      }
+    }
+
+    throw Exception(lastError ?? 'Groq AI bilan bog\'lanib bo\'lmadi.');
+  }
+
+  Future<_ModelResponse> _postGeminiGenerate({
+    required String apiKey,
+    required List<Map<String, dynamic>> parts,
+    required double temperature,
+    required Duration timeout,
+  }) async {
+    String? lastError;
+
+    for (final model in geminiModels) {
+      for (final useJsonMime in [true, false]) {
+        final payload = <String, dynamic>{
+          'contents': [
+            {'parts': parts},
+          ],
+          'generationConfig': {
+            'temperature': temperature,
+            if (useJsonMime) 'response_mime_type': 'application/json',
+          },
+        };
+
+        try {
+          final url = Uri.parse(
+            'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey',
+          );
+          final response = await http
+              .post(
+                url,
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode(payload),
+              )
+              .timeout(timeout);
+
+          if (response.statusCode == 200) {
+            final resJson =
+                jsonDecode(utf8.decode(response.bodyBytes))
+                    as Map<String, dynamic>;
+            final text = extractGeminiText(resJson);
+            if (text.isEmpty) {
+              lastError = 'Gemini AI ($model) bo\'sh javob qaytardi.';
+              break;
+            }
+            return _ModelResponse(text: text, modelName: model);
+          }
+
+          final bodyText = utf8.decode(response.bodyBytes, allowMalformed: true);
+          if (response.statusCode == 401 ||
+              response.statusCode == 403 ||
+              bodyText.contains('API_KEY_INVALID')) {
+            throw Exception(
+              'Gemini API kaliti noto\'g\'ri yoki faol emas. Iltimos, sozlamalarda kalitni tekshiring.',
+            );
+          }
+
+          lastError = _extractApiErrorMessage(
+            statusCode: response.statusCode,
+            body: bodyText,
+            providerLabel: 'Gemini',
+          );
+
+          if (useJsonMime &&
+              response.statusCode == 400 &&
+              bodyText.contains('response_mime_type')) {
+            continue;
+          }
+
+          break;
+        } on TimeoutException {
+          lastError = 'Gemini serveri ($model) belgilangan vaqtda javob bermadi.';
+          break;
+        } on SocketException {
+          throw Exception('Internet aloqasini tekshiring.');
+        } catch (e) {
+          if (e is Exception &&
+              (e.toString().contains('API kaliti') ||
+                  e.toString().contains('Internet aloqasini'))) {
+            rethrow;
+          }
+          lastError = 'Gemini xatosi ($model): $e';
+          break;
+        }
+      }
+    }
+
+    throw Exception(lastError ?? 'Gemini AI bilan bog\'lanib bo\'lmadi.');
+  }
+
+  /// Extracts non-thought text parts from a Gemini response payload.
+  @visibleForTesting
+  static String extractGeminiText(Map<String, dynamic> resJson) {
+    final candidates = resJson['candidates'] as List?;
+    if (candidates == null || candidates.isEmpty) return '';
+
+    final content = candidates[0]['content'] as Map<String, dynamic>?;
+    final parts = content?['parts'] as List?;
+    if (parts == null || parts.isEmpty) return '';
+
+    final nonThoughtTexts = <String>[];
+    for (final part in parts) {
+      if (part is! Map) continue;
+      if (part['thought'] == true) continue;
+      final text = part['text']?.toString().trim();
+      if (text != null && text.isNotEmpty) {
+        nonThoughtTexts.add(text);
+      }
+    }
+    return nonThoughtTexts.join('\n').trim();
+  }
+
+  String _extractApiErrorMessage({
+    required int statusCode,
+    required String body,
+    required String providerLabel,
+  }) {
+    if (statusCode == 429) {
+      return '$providerLabel so\'rovlar limiti tugadi (429). Biroz kutib qayta urinib ko\'ring.';
+    }
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['error'] is Map) {
+        final msg = decoded['error']['message']?.toString().trim();
+        if (msg != null && msg.isNotEmpty) {
+          return '$providerLabel xatosi ($statusCode): $msg';
+        }
+      }
+    } catch (_) {}
+    return '$providerLabel xatosi ($statusCode)';
   }
 
   String _buildFocusPrompt(ScanFocusMode focusMode) {
@@ -476,41 +681,112 @@ Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring:
     };
   }
 
-  AiScanResult _parseJsonResponse(String rawText) {
+  static String _stripThinkingAndFences(String rawText) {
+    var cleaned = rawText
+        .replaceAll(RegExp(r'<think>[\s\S]*?</think>', caseSensitive: false), '')
+        .trim();
+
+    // Handle truncated or unclosed <think> tag if JSON follows or precedes it
+    if (cleaned.toLowerCase().contains('<think>')) {
+      final thinkIdx = cleaned.toLowerCase().indexOf('<think>');
+      final jsonStart = cleaned.indexOf('{');
+      final arrStart = cleaned.indexOf('[');
+      final firstJson = [jsonStart, arrStart].where((i) => i != -1).fold<int>(
+        -1,
+        (prev, curr) => prev == -1 || curr < prev ? curr : prev,
+      );
+      if (firstJson > thinkIdx) {
+        cleaned = cleaned.substring(firstJson).trim();
+      }
+    }
+
+    cleaned = cleaned.replaceAll(RegExp(r'```json\s*', caseSensitive: false), '');
+    cleaned = cleaned.replaceAll(RegExp(r'```\s*'), '').trim();
+    return cleaned;
+  }
+
+  static dynamic _decodeLooseJson(String rawText) {
+    var cleaned = _stripThinkingAndFences(rawText);
+
+    final objStart = cleaned.indexOf('{');
+    final objEnd = cleaned.lastIndexOf('}');
+    final arrStart = cleaned.indexOf('[');
+    final arrEnd = cleaned.lastIndexOf(']');
+
+    final hasObj = objStart != -1 && objEnd > objStart;
+    final hasArr = arrStart != -1 && arrEnd > arrStart;
+
+    if (hasArr && (!hasObj || arrStart < objStart)) {
+      cleaned = cleaned.substring(arrStart, arrEnd + 1);
+    } else if (hasObj) {
+      cleaned = cleaned.substring(objStart, objEnd + 1);
+    }
+
+    return jsonDecode(cleaned);
+  }
+
+  @visibleForTesting
+  static ExtractedWordItem parseWordDetailsJson(
+    String rawText, {
+    required String fallbackWord,
+  }) {
     try {
-      // 1. Remove thinking tokens if any (e.g. <think>...</think>)
-      var cleaned = rawText.replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '').trim();
-
-      // 2. Remove markdown code fences
-      if (cleaned.startsWith('```json')) {
-        cleaned = cleaned.substring(7);
-      } else if (cleaned.startsWith('```')) {
-        cleaned = cleaned.substring(3);
-      }
-      if (cleaned.endsWith('```')) {
-        cleaned = cleaned.substring(0, cleaned.length - 3);
-      }
-      cleaned = cleaned.trim();
-
-      // 3. Extract JSON object bounds if there's text outside
-      final start = cleaned.indexOf('{');
-      final end = cleaned.lastIndexOf('}');
-      if (start != -1 && end != -1 && end > start) {
-        cleaned = cleaned.substring(start, end + 1);
+      final decoded = _decodeLooseJson(rawText);
+      Map<String, dynamic>? map;
+      if (decoded is Map) {
+        if (decoded['words'] is List && (decoded['words'] as List).isNotEmpty) {
+          map = Map<String, dynamic>.from((decoded['words'] as List).first as Map);
+        } else {
+          map = Map<String, dynamic>.from(decoded);
+        }
+      } else if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+        map = Map<String, dynamic>.from(decoded.first as Map);
       }
 
-      final parsed = jsonDecode(cleaned) as Map<String, dynamic>;
-      final deckName = (parsed['deck_name'] ??
-              parsed['suggested_deck_name'] ??
-              parsed['title'] ??
-              'Rasmdan olingan so\'zlar')
-          .toString()
-          .trim();
+      if (map == null) {
+        throw Exception('AI javobi kutilgan formatda emas.');
+      }
 
-      final wordsList = (parsed['words'] ??
-          parsed['cards'] ??
-          parsed['items'] ??
-          parsed['vocabulary']) as List?;
+      final item = ExtractedWordItem.fromJson(map);
+      if (item.word.isEmpty) {
+        item.word = fallbackWord;
+      }
+      if (item.translation.isEmpty) {
+        throw Exception('AI tarjima qaytarmadi. Qayta urinib ko\'ring.');
+      }
+      return item;
+    } catch (e) {
+      debugPrint('Word Details JSON Parse Error: $e\nRaw Text: $rawText');
+      if (e is Exception) rethrow;
+      throw Exception('AI javobini tahlil qilishda xatolik: $e');
+    }
+  }
+
+  @visibleForTesting
+  static AiScanResult parseScanJsonResponse(String rawText) {
+    try {
+      final decoded = _decodeLooseJson(rawText);
+
+      String deckName = 'Rasmdan olingan so\'zlar';
+      List? wordsList;
+
+      if (decoded is List) {
+        wordsList = decoded;
+      } else if (decoded is Map) {
+        final parsed = Map<String, dynamic>.from(decoded);
+        final rawDeckName = (parsed['deck_name'] ??
+                parsed['suggested_deck_name'] ??
+                parsed['title'])
+            ?.toString()
+            .trim();
+        if (rawDeckName != null && rawDeckName.isNotEmpty) {
+          deckName = rawDeckName;
+        }
+        wordsList = (parsed['words'] ??
+            parsed['cards'] ??
+            parsed['items'] ??
+            parsed['vocabulary']) as List?;
+      }
 
       if (wordsList == null || wordsList.isEmpty) {
         throw Exception(
@@ -519,7 +795,8 @@ Javobni FAQAT toza JSON formatida quyidagi strukturada qaytaring:
       }
 
       final words = wordsList
-          .map((w) => ExtractedWordItem.fromJson(Map<String, dynamic>.from(w as Map)))
+          .whereType<Map>()
+          .map((w) => ExtractedWordItem.fromJson(Map<String, dynamic>.from(w)))
           .where((w) => w.word.isNotEmpty && w.translation.isNotEmpty)
           .toList();
 

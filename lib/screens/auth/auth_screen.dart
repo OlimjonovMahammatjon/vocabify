@@ -28,11 +28,17 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscureSignInPass = true;
   bool _obscureSignUpPass = true;
   bool _isSubmitting = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging && _errorMessage != null) {
+        setState(() => _errorMessage = null);
+      }
+    });
   }
 
   @override
@@ -46,68 +52,81 @@ class _AuthScreenState extends State<AuthScreen>
     super.dispose();
   }
 
-  Future<void> _handleSignIn() async {
-    if (!_signInFormKey.currentState!.validate()) return;
-    setState(() => _isSubmitting = true);
-
-    final auth = context.read<AuthProvider>();
-    final error = await auth.signIn(
-      _signInEmailController.text,
-      _signInPasswordController.text,
-    );
-
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: AppColors.destructive,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
-      }
+  void _clearError() {
+    if (_errorMessage != null) {
+      setState(() => _errorMessage = null);
     }
   }
 
-  Future<void> _handleSignUp() async {
-    if (!_signUpFormKey.currentState!.validate()) return;
-    setState(() => _isSubmitting = true);
+  Future<void> _submitAuth({
+    required GlobalKey<FormState> formKey,
+    required Future<String?> Function() action,
+    String? successMessage,
+  }) async {
+    if (!formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
 
-    final auth = context.read<AuthProvider>();
-    final error = await auth.signUp(
-      _signUpEmailController.text,
-      _signUpPasswordController.text,
-      _signUpNameController.text,
-    );
+    final error = await action();
 
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-      if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (error != null) {
+      setState(() => _errorMessage = error);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
           SnackBar(
             content: Text(error),
             backgroundColor: AppColors.destructive,
             behavior: SnackBarBehavior.floating,
           ),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Xush kelibsiz! 🎉'),
+      return;
+    }
+
+    if (successMessage != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
-        );
-      }
     }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+    );
+  }
+
+  Future<void> _handleSignIn() {
+    final auth = context.read<AuthProvider>();
+    return _submitAuth(
+      formKey: _signInFormKey,
+      action: () => auth.signIn(
+        _signInEmailController.text,
+        _signInPasswordController.text,
+      ),
+    );
+  }
+
+  Future<void> _handleSignUp() {
+    final auth = context.read<AuthProvider>();
+    return _submitAuth(
+      formKey: _signUpFormKey,
+      action: () => auth.signUp(
+        _signUpEmailController.text,
+        _signUpPasswordController.text,
+        _signUpNameController.text,
+      ),
+      successMessage: 'Xush kelibsiz! 🎉',
+    );
   }
 
   @override
@@ -229,11 +248,54 @@ class _AuthScreenState extends State<AuthScreen>
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 16),
+
+                        if (_errorMessage != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.destructive.withValues(
+                                alpha: 0.1,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.destructive.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline_rounded,
+                                  color: AppColors.destructive,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: const TextStyle(
+                                      color: AppColors.destructive,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                        ] else
+                          const SizedBox(height: 4),
 
                         // Form Tab Views
                         SizedBox(
-                          height: 280,
+                          height: 288,
                           child: TabBarView(
                             controller: _tabController,
                             children: [
@@ -247,6 +309,7 @@ class _AuthScreenState extends State<AuthScreen>
                                     TextFormField(
                                       controller: _signInEmailController,
                                       keyboardType: TextInputType.emailAddress,
+                                      onChanged: (_) => _clearError(),
                                       decoration: const InputDecoration(
                                         labelText: 'Email',
                                         hintText: 'siz@example.com',
@@ -269,6 +332,7 @@ class _AuthScreenState extends State<AuthScreen>
                                     TextFormField(
                                       controller: _signInPasswordController,
                                       obscureText: _obscureSignInPass,
+                                      onChanged: (_) => _clearError(),
                                       decoration: InputDecoration(
                                         labelText: 'Parol',
                                         hintText: '••••••••',
@@ -346,6 +410,7 @@ class _AuthScreenState extends State<AuthScreen>
                                     TextFormField(
                                       controller: _signUpEmailController,
                                       keyboardType: TextInputType.emailAddress,
+                                      onChanged: (_) => _clearError(),
                                       decoration: const InputDecoration(
                                         labelText: 'Email',
                                         hintText: 'siz@example.com',
@@ -368,6 +433,7 @@ class _AuthScreenState extends State<AuthScreen>
                                     TextFormField(
                                       controller: _signUpPasswordController,
                                       obscureText: _obscureSignUpPass,
+                                      onChanged: (_) => _clearError(),
                                       decoration: InputDecoration(
                                         labelText: 'Parol (kamida 8 belgi)',
                                         hintText: '••••••••',

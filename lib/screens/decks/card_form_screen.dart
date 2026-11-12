@@ -7,10 +7,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/services/ai_scan_service.dart';
 import '../../models/card_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cards_provider.dart';
 import '../../providers/decks_provider.dart';
+import '../../widgets/ai_settings_dialog.dart';
 
 /// Shows the "Yangi so'z qo'shish" modal bottom sheet matching the exact design.
 Future<void> showAddWordModal(
@@ -101,6 +103,7 @@ class _CardFormModalState extends State<CardFormModal> {
   final _translationController = TextEditingController();
   final _exampleController = TextEditingController();
   bool _isSubmitting = false;
+  bool _isGeneratingAi = false;
 
   // JSON import controllers
   final _jsonController = TextEditingController();
@@ -311,6 +314,85 @@ So'zlar ro'yxati:
       }
     } catch (e) {
       debugPrint('File picker error: $e');
+    }
+  }
+
+  Future<void> _generateWithAi({bool onlyExample = false}) async {
+    final word = _wordController.text.trim();
+    if (word.isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Avval inglizcha so\'zni kiriting'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      return;
+    }
+
+    final hasKey = await AiScanService.instance.hasAnyApiKey();
+    if (!mounted) return;
+    if (!hasKey) {
+      final saved = await showAiSettingsDialog(context);
+      if (saved != true || !mounted) return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isGeneratingAi = true);
+
+    try {
+      final item = await AiScanService.instance.generateWordDetails(word: word);
+      if (!mounted) return;
+
+      setState(() {
+        if (!onlyExample || _translationController.text.trim().isEmpty) {
+          _translationController.text = item.translation;
+        }
+        if ((item.example ?? '').trim().isNotEmpty) {
+          _exampleController.text = item.example!.trim();
+        }
+      });
+
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              onlyExample
+                  ? 'AI misol gap yaratdi ✨'
+                  : 'Tarjima va misol gap AI bilan to\'ldirildi ✨',
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().replaceFirst('Exception:', '').trim();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: AppColors.destructive,
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Sozlamalar',
+              textColor: Colors.white,
+              onPressed: () {
+                showAiSettingsDialog(context, showSavedSnackBar: true);
+              },
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingAi = false);
+      }
     }
   }
 
@@ -622,14 +704,25 @@ So'zlar ro'yxati:
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. So'z (English) *
-          Text(
-            'So\'z (English) *',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
+          // 1. So'z (English) * + AI Auto-fill button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'So\'z (English) *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              _AiFillButton(
+                label: 'AI to\'ldirish',
+                isLoading: _isGeneratingAi,
+                isDark: isDark,
+                onTap: _isGeneratingAi ? null : () => _generateWithAi(),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           TextFormField(
@@ -700,14 +793,28 @@ So'zlar ro'yxati:
           ),
           const SizedBox(height: 16),
 
-          // 3. Misol gap
-          Text(
-            'Misol gap',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
+          // 3. Misol gap + AI example button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Misol gap',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              _AiFillButton(
+                label: 'AI misol',
+                isLoading: _isGeneratingAi,
+                isDark: isDark,
+                compact: true,
+                onTap: _isGeneratingAi
+                    ? null
+                    : () => _generateWithAi(onlyExample: true),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           TextFormField(
@@ -1059,6 +1166,75 @@ So'zlar ro'yxati:
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AiFillButton extends StatelessWidget {
+  final String label;
+  final bool isLoading;
+  final bool isDark;
+  final bool compact;
+  final VoidCallback? onTap;
+
+  const _AiFillButton({
+    required this.label,
+    required this.isLoading,
+    required this.isDark,
+    this.compact = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = isDark
+        ? AppColors.brand.withValues(alpha: 0.16)
+        : const Color(0xFFEFF6FF);
+    final borderColor = AppColors.brand.withValues(alpha: 0.35);
+    final fgColor = isDark ? const Color(0xFF93C5FD) : const Color(0xFF2563EB);
+
+    return Material(
+      color: bgColor,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 12,
+            vertical: compact ? 4 : 5,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    color: fgColor,
+                  ),
+                )
+              else
+                Icon(Icons.auto_awesome_rounded, size: 14, color: fgColor),
+              const SizedBox(width: 5),
+              Text(
+                isLoading ? 'Kuting...' : label,
+                style: TextStyle(
+                  fontSize: compact ? 11.5 : 12,
+                  fontWeight: FontWeight.w600,
+                  color: fgColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

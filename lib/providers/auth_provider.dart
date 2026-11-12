@@ -112,37 +112,73 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Maps Supabase and network errors to user-facing Uzbek messages.
+  @visibleForTesting
+  static String formatAuthError(Object error, {required String fallback}) {
+    final raw = error is AuthException ? error.message : error.toString();
+    final msg = raw.toLowerCase();
+
+    if (msg.contains('invalid login credentials') ||
+        msg.contains('invalid_credentials')) {
+      return 'Email yoki parol noto\'g\'ri';
+    }
+    if (msg.contains('email not confirmed')) {
+      return 'Email manzilingiz hali tasdiqlanmagan';
+    }
+    if (msg.contains('user already registered') ||
+        msg.contains('already been registered')) {
+      return 'Bu email allaqachon ro\'yxatdan o\'tgan';
+    }
+    if (msg.contains('too many requests') || msg.contains('rate limit')) {
+      return 'Juda ko\'p urinish bo\'ldi. Birozdan keyin qayta urinib ko\'ring';
+    }
+    if (msg.contains('weak password')) {
+      return 'Parol juda oddiy. Kuchliroq parol kiriting';
+    }
+    if (msg.contains('invalid email') ||
+        msg.contains('unable to validate email address')) {
+      return 'Yaroqli email manzil kiriting';
+    }
+    if (msg.contains('socketexception') ||
+        msg.contains('failed host lookup') ||
+        msg.contains('clientexception') ||
+        msg.contains('timeoutexception') ||
+        msg.contains('network')) {
+      return 'Internet aloqasini tekshiring';
+    }
+
+    if (error is AuthException && error.message.trim().isNotEmpty) {
+      return error.message;
+    }
+    return fallback;
+  }
+
   Future<String?> signIn(String email, String password) async {
     try {
-      _isLoading = true;
-      notifyListeners();
-
       final res = await SupabaseService.client.auth.signInWithPassword(
         email: email.trim(),
         password: password.trim(),
       );
+
+      if (res.user == null) {
+        return 'Email yoki parol noto\'g\'ri';
+      }
 
       _user = res.user;
       CacheService.instance.activateUser(_user?.id);
       await OfflineQueueService.instance.activateUser(_user?.id);
       await loadProfile();
       return null;
-    } on AuthException catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      return e.message;
     } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      return 'Tizimga kirishda xatolik yuz berdi';
+      return formatAuthError(
+        e,
+        fallback: 'Tizimga kirishda xatolik yuz berdi',
+      );
     }
   }
 
   Future<String?> signUp(String email, String password, String name) async {
     try {
-      _isLoading = true;
-      notifyListeners();
-
       final res = await SupabaseService.client.auth.signUp(
         email: email.trim(),
         password: password.trim(),
@@ -163,14 +199,11 @@ class AuthProvider extends ChangeNotifier {
       }
 
       return null;
-    } on AuthException catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      return e.message;
     } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      return 'Ro\'yxatdan o\'tishda xatolik yuz berdi';
+      return formatAuthError(
+        e,
+        fallback: 'Ro\'yxatdan o\'tishda xatolik yuz berdi',
+      );
     }
   }
 

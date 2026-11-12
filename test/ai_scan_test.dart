@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vocabify_app/core/services/ai_scan_service.dart';
+import 'package:vocabify_app/screens/decks/card_form_screen.dart';
 
 void main() {
   group('AiScanService Models & Parsing Tests', () {
@@ -88,6 +90,90 @@ void main() {
       expect(AiProvider.values.contains(AiProvider.groq), true);
       expect(AiProvider.values.contains(AiProvider.gemini), true);
       expect(AiScanService.defaultGroqVisionModel, 'qwen/qwen3.8-27b');
+      expect(
+        AiScanService.fallbackGroqModels,
+        contains('meta-llama/llama-4-scout-17b-16e-instruct'),
+      );
+      expect(AiScanService.textGroqModels, contains('llama-3.3-70b-versatile'));
+      expect(AiScanService.geminiModels, ['gemini-2.5-flash', 'gemini-2.0-flash']);
+    });
+
+    test('parseWordDetailsJson handles thinking tags and markdown fences', () {
+      const raw = '''
+<think>Thinking about the word resilience...</think>
+```json
+{
+  "word": "resilience",
+  "translation": "chidamlilik, matonat",
+  "pronunciation": "/rɪˈzɪl.jəns/",
+  "definition": "The capacity to recover quickly",
+  "example": "She showed remarkable resilience."
+}
+```
+''';
+      final item = AiScanService.parseWordDetailsJson(
+        raw,
+        fallbackWord: 'resilience',
+      );
+      expect(item.word, 'resilience');
+      expect(item.translation, 'chidamlilik, matonat');
+      expect(item.example, 'She showed remarkable resilience.');
+    });
+
+    test('parseScanJsonResponse supports top-level JSON array', () {
+      const raw = '''
+```json
+[
+  {
+    "word": "lucid",
+    "translation": "ravshan, tushunarli",
+    "example": "His explanation was lucid."
+  }
+]
+```
+''';
+      final result = AiScanService.parseScanJsonResponse(raw);
+      expect(result.words.length, 1);
+      expect(result.words.first.word, 'lucid');
+      expect(result.words.first.translation, 'ravshan, tushunarli');
+    });
+
+    test('extractGeminiText skips thought parts from thinking models', () {
+      final payload = {
+        'candidates': [
+          {
+            'content': {
+              'parts': [
+                {'thought': true, 'text': 'internal reasoning'},
+                {'text': '{"word":"vivid","translation":"yorqin"}'},
+              ],
+            },
+          },
+        ],
+      };
+
+      expect(
+        AiScanService.extractGeminiText(payload),
+        '{"word":"vivid","translation":"yorqin"}',
+      );
+    });
+
+    testWidgets('CardFormModal shows AI fill buttons and validates empty word', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: CardFormModal(deckId: 'deck-1')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('AI to\'ldirish'), findsOneWidget);
+      expect(find.text('AI misol'), findsOneWidget);
+
+      await tester.tap(find.text('AI to\'ldirish'));
+      await tester.pump();
+      expect(find.text('Avval inglizcha so\'zni kiriting'), findsOneWidget);
     });
   });
 }
