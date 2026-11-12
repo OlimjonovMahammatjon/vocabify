@@ -14,7 +14,9 @@ import '../../providers/quiz_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/ai_settings_dialog.dart';
 import '../auth/auth_screen.dart';
+import '../auth/forgot_password_modal.dart';
 import '../decks/ai_scan_screen.dart';
+import 'account_security_sheets.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -28,7 +30,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   bool get wantKeepAlive => true;
 
-  final _nameController = TextEditingController();
   final _goalController = TextEditingController();
   late final AuthProvider _authProvider;
   String? _loadedProfileId;
@@ -47,26 +48,27 @@ class _ProfileScreenState extends State<ProfileScreen>
     final profile = _authProvider.profile;
     if (profile == null || profile.id == _loadedProfileId || _isSaving) return;
     _loadedProfileId = profile.id;
-    _nameController.text = profile.displayName ?? '';
     _goalController.text = profile.dailyGoal.toString();
   }
 
   @override
   void dispose() {
     _authProvider.removeListener(_syncProfileControllers);
-    _nameController.dispose();
     _goalController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSave() async {
-    final name = _nameController.text.trim();
     final goal = int.tryParse(_goalController.text.trim()) ?? 20;
+    final auth = context.read<AuthProvider>();
+    final currentName =
+        auth.profile?.displayName ??
+        auth.user?.userMetadata?['display_name']?.toString() ??
+        '';
 
     setState(() => _isSaving = true);
-    final auth = context.read<AuthProvider>();
     final success = await auth.updateProfile(
-      displayName: name,
+      displayName: currentName,
       dailyGoal: goal,
     );
 
@@ -308,13 +310,9 @@ class _ProfileScreenState extends State<ProfileScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF181829), Color(0xFF1E1E38)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: const Color(0xFF0F172A),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF3B3566), width: 1.5),
+                border: Border.all(color: const Color(0xFF334155), width: 1.5),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,9 +373,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                          ),
+                          color: AppColors.brandDark,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
@@ -460,9 +456,16 @@ class _ProfileScreenState extends State<ProfileScreen>
     final profile = auth.profile;
     final user = auth.user;
 
+    final metaName = user?.userMetadata?['display_name']?.toString().trim() ?? '';
+    final profileName = profile?.displayName?.trim() ?? '';
+    final displayName = profileName.isNotEmpty
+        ? profileName
+        : (metaName.isNotEmpty ? metaName : 'Foydalanuvchi');
+    final hasCustomName = profileName.isNotEmpty || metaName.isNotEmpty;
+
     final initialChar =
-        (profile?.displayName?.isNotEmpty == true
-                ? profile!.displayName![0]
+        (hasCustomName
+                ? displayName[0]
                 : (user?.email?.isNotEmpty == true ? user!.email![0] : '?'))
             .toUpperCase();
 
@@ -477,19 +480,18 @@ class _ProfileScreenState extends State<ProfileScreen>
             Container(
               padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [const Color(0xFF1E3A5F), const Color(0xFF14243B)]
-                      : [AppColors.brand, const Color(0xFF283B60)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                color: isDark ? const Color(0xFF152238) : AppColors.brand,
                 borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.08)
+                      : Colors.transparent,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.brand.withValues(alpha: 0.2),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
@@ -514,7 +516,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    profile?.displayName ?? 'Foydalanuvchi',
+                    displayName,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -585,7 +587,166 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
             const SizedBox(height: 16),
 
-            // Profile Settings Card
+            // Account & Security Card (Username & Password Change)
+            Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: () => showChangeUsernameSheet(
+                      context,
+                      currentUsername: hasCustomName ? displayName : '',
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color:
+                                  (isDark
+                                          ? AppColors.brandDark
+                                          : AppColors.brand)
+                                      .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: isDark
+                                  ? AppColors.brandDark
+                                  : AppColors.brand,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Username o\'zgartirish',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? AppColors.darkText
+                                        : AppColors.lightText,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  hasCustomName
+                                      ? displayName
+                                      : 'Username belgilanmagan',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.lightTextMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                  InkWell(
+                    onTap: () => showChangePasswordSheet(
+                      context,
+                      onForgotPassword: () => showForgotPasswordModal(
+                        context,
+                        initialEmail: user?.email ?? '',
+                        lockEmail: (user?.email ?? '').isNotEmpty,
+                      ),
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.lock_outline_rounded,
+                              color: AppColors.accent,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Parolni o\'zgartirish',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark
+                                        ? AppColors.darkText
+                                        : AppColors.lightText,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Hisob xavfsizligi uchun parolni yangilang',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isDark
+                                        ? AppColors.darkTextMuted
+                                        : AppColors.lightTextMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: AppColors.lightTextMuted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Daily Goal Card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -599,16 +760,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Shaxsiy ma\'lumotlar',
+                    'Kunlik maqsad',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Ismingiz',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
                   ),
                   const SizedBox(height: 14),
                   TextFormField(
@@ -619,7 +772,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       prefixIcon: Icon(Icons.flag_outlined),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: _isSaving ? null : _handleSave,
                     style: ElevatedButton.styleFrom(

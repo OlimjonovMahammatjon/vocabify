@@ -126,15 +126,7 @@ class _SplashScreenState extends State<SplashScreen>
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF0F172A), const Color(0xFF090D16)]
-                : [const Color(0xFFF8FAFC), const Color(0xFFEEF2F6)],
-          ),
-        ),
+        color: isDark ? AppColors.darkBg : AppColors.lightBg,
         child: SafeArea(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -225,9 +217,7 @@ class _SplashScreenState extends State<SplashScreen>
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                            ),
+                            color: isDark ? AppColors.brandDark : AppColors.brand,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(

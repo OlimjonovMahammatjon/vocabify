@@ -20,6 +20,7 @@ import 'providers/quiz_provider.dart';
 import 'providers/stats_provider.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
+import 'screens/auth/reset_password_screen.dart';
 import 'screens/main_navigation_screen.dart';
 
 void main() {
@@ -152,6 +153,9 @@ class AuthGate extends StatelessWidget {
     }
 
     if (auth.isAuthenticated) {
+      if (auth.isPasswordRecovery) {
+        return const ResetPasswordScreen();
+      }
       return const MainNavigationScreen();
     }
 

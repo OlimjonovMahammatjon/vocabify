@@ -441,14 +441,13 @@ class _AiScanScreenState extends State<AiScanScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF1E3A5F), const Color(0xFF14243B)]
-                    : [AppColors.brand, const Color(0xFF283B60)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: isDark ? const Color(0xFF152238) : AppColors.brand,
               borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : Colors.transparent,
+              ),
             ),
             child: Row(
               children: [

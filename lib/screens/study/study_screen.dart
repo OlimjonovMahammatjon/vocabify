@@ -218,7 +218,9 @@ class _StudyScreenState extends State<StudyScreen>
                           }
                         },
                         borderRadius: BorderRadius.circular(12),
-                        child: Container(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: !study.isTypingMode
@@ -277,7 +279,9 @@ class _StudyScreenState extends State<StudyScreen>
                           }
                         },
                         borderRadius: BorderRadius.circular(12),
-                        child: Container(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: study.isTypingMode
@@ -402,26 +406,28 @@ class _StudyScreenState extends State<StudyScreen>
     StudyProvider study,
     bool isDark,
   ) {
-    return AnimatedBuilder(
-      animation: _flipAnimation,
-      builder: (context, child) {
-        final angle = _flipAnimation.value * pi;
-        final isFront = angle < pi / 2;
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _flipAnimation,
+        builder: (context, child) {
+          final angle = _flipAnimation.value * pi;
+          final isFront = angle < pi / 2;
 
-        return Transform(
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0014) // smooth realistic perspective
-            ..rotateY(angle),
-          alignment: Alignment.center,
-          child: isFront
-              ? _buildCardFront(context, card, study, isDark)
-              : Transform(
-                  transform: Matrix4.identity()..rotateY(pi),
-                  alignment: Alignment.center,
-                  child: _buildCardBack(context, card, study, isDark),
-                ),
-        );
-      },
+          return Transform(
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.0014) // smooth realistic perspective
+              ..rotateY(angle),
+            alignment: Alignment.center,
+            child: isFront
+                ? _buildCardFront(context, card, study, isDark)
+                : Transform(
+                    transform: Matrix4.identity()..rotateY(pi),
+                    alignment: Alignment.center,
+                    child: _buildCardBack(context, card, study, isDark),
+                  ),
+          );
+        },
+      ),
     );
   }
 

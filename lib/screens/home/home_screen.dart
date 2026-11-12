@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../widgets/motion/app_motion.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/decks_provider.dart';
 import '../../providers/cards_provider.dart';
@@ -98,24 +99,25 @@ class _HomeScreenState extends State<HomeScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 1. Streak & Goal Hero Card
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark
-                        ? [const Color(0xFF1E3A5F), const Color(0xFF14243B)]
-                        : [AppColors.brand, const Color(0xFF283B60)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.brand.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
+              StaggeredEntrance(
+                index: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF152238) : AppColors.brand,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : Colors.white.withValues(alpha: 0.08),
                     ),
-                  ],
-                ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.12),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
@@ -232,14 +234,18 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                   ],
                 ),
+                ),
               ),
               const SizedBox(height: 16),
 
               // 2. Action Buttons (Takrorlash & Yozib yodlash)
-              Row(
+              StaggeredEntrance(
+                index: 1,
+                child: Row(
                 children: [
                   Expanded(
-                    child: InkWell(
+                    child: PressScale(
+                      child: InkWell(
                       onTap: () {
                         Navigator.push(
                           context,
@@ -257,8 +263,8 @@ class _HomeScreenState extends State<HomeScreen>
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.brand.withValues(alpha: 0.2),
-                              blurRadius: 10,
+                              color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.1),
+                              blurRadius: 8,
                               offset: const Offset(0, 4),
                             ),
                           ],
@@ -284,10 +290,12 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: InkWell(
+                    child: PressScale(
+                      child: InkWell(
                       onTap: () {
                         Navigator.push(
                           context,
@@ -335,13 +343,18 @@ class _HomeScreenState extends State<HomeScreen>
                         ),
                       ),
                     ),
+                    ),
                   ),
                 ],
+                ),
               ),
               const SizedBox(height: 14),
 
               // 2.5 Aralash Sinov (Global Random Mix)
-              InkWell(
+              StaggeredEntrance(
+                index: 2,
+                child: PressScale(
+                  child: InkWell(
                 onTap: allCards.isNotEmpty
                     ? () => CustomStudyModal.show(
                           context,
@@ -362,24 +375,17 @@ class _HomeScreenState extends State<HomeScreen>
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: isDark
-                          ? [
-                              const Color(0xFF1E2D4A),
-                              const Color(0xFF162238),
-                            ]
-                          : [
-                              const Color(0xFF283B60),
-                              const Color(0xFF1E2D4A),
-                            ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: isDark ? const Color(0xFF152238) : AppColors.brand,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : Colors.white.withValues(alpha: 0.08),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.brand.withValues(alpha: 0.25),
-                        blurRadius: 10,
+                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
+                        blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -454,11 +460,16 @@ class _HomeScreenState extends State<HomeScreen>
                     ],
                   ),
                 ),
+                ),
+                ),
               ),
               const SizedBox(height: 14),
 
               // 2.6 AI Scan Card (Rasmdan to'plam yaratish)
-              InkWell(
+              StaggeredEntrance(
+                index: 3,
+                child: PressScale(
+                  child: InkWell(
                 onTap: () {
                   Navigator.push(
                     context,
@@ -474,19 +485,19 @@ class _HomeScreenState extends State<HomeScreen>
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color(0xFF7C3AED),
-                        Color(0xFF4F46E5),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: isDark
+                        ? const Color(0xFF182235)
+                        : const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : Colors.white.withValues(alpha: 0.08),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF7C3AED).withValues(alpha: 0.28),
-                        blurRadius: 10,
+                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
+                        blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -561,6 +572,8 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     ],
                   ),
+                ),
+                ),
                 ),
               ),
               const SizedBox(height: 16),

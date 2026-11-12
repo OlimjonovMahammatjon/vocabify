@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/services/supabase_service.dart';
 import '../core/services/offline_queue_service.dart';
 import '../core/services/cache_service.dart';
+import '../core/utils/helpers.dart';
 import '../models/profile_model.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -13,6 +14,7 @@ class AuthProvider extends ChangeNotifier {
   User? _user;
   ProfileModel? _profile;
   bool _isLoading = true;
+  bool _isPasswordRecovery = false;
   bool _isDisposed = false;
   StreamSubscription<AuthState>? _authSubscription;
   int _authGeneration = 0;
@@ -20,6 +22,7 @@ class AuthProvider extends ChangeNotifier {
   User? get user => _user;
   ProfileModel? get profile => _profile;
   bool get isLoading => _isLoading;
+  bool get isPasswordRecovery => _isPasswordRecovery;
   bool get isAuthenticated => _user != null;
 
   AuthProvider({Future<void>? coreInitialization})
@@ -61,6 +64,11 @@ class AuthProvider extends ChangeNotifier {
       data,
     ) async {
       final generation = ++_authGeneration;
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        _isPasswordRecovery = true;
+      } else if (data.event == AuthChangeEvent.signedOut) {
+        _isPasswordRecovery = false;
+      }
       final session = data.session;
       _user = session?.user;
       CacheService.instance.activateUser(_user?.id);
@@ -122,6 +130,27 @@ class AuthProvider extends ChangeNotifier {
         msg.contains('invalid_credentials')) {
       return 'Email yoki parol noto\'g\'ri';
     }
+    if (msg.contains('phone logins are disabled') ||
+        msg.contains('phone provider is disabled')) {
+      return 'Telefon orqali kirish Supabase sozlamalarida yoqilmagan';
+    }
+    if (msg.contains('error sending confirmation sms') ||
+        msg.contains('unable to send sms') ||
+        msg.contains('sms provider') ||
+        msg.contains('twilio')) {
+      return 'SMS yuborib bo\'lmadi. Supabase SMS provayderi sozlamalarini tekshiring';
+    }
+    if (msg.contains('signups not allowed for otp') ||
+        msg.contains('user not found')) {
+      return 'Bu hisob ro\'yxatdan o\'tmagan';
+    }
+    if (msg.contains('phone_exists') ||
+        msg.contains('phone number already registered')) {
+      return 'Bu telefon raqami allaqachon ro\'yxatdan o\'tgan';
+    }
+    if (msg.contains('invalid phone')) {
+      return 'To\'g\'ri telefon raqami kiriting (+998901234567)';
+    }
     if (msg.contains('email not confirmed')) {
       return 'Email manzilingiz hali tasdiqlanmagan';
     }
@@ -134,6 +163,15 @@ class AuthProvider extends ChangeNotifier {
     }
     if (msg.contains('weak password')) {
       return 'Parol juda oddiy. Kuchliroq parol kiriting';
+    }
+    if (msg.contains('same_password') ||
+        msg.contains('different from the old password')) {
+      return 'Yangi parol eski paroldan farqli bo\'lishi kerak';
+    }
+    if (msg.contains('otp_expired') ||
+        msg.contains('token has expired') ||
+        msg.contains('invalid otp')) {
+      return 'Tasdiqlash kodi noto\'g\'ri yoki muddati tugagan';
     }
     if (msg.contains('invalid email') ||
         msg.contains('unable to validate email address')) {
@@ -151,6 +189,139 @@ class AuthProvider extends ChangeNotifier {
       return error.message;
     }
     return fallback;
+  }
+
+  Future<String?> signInWithPhone(String phone, String password) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    if (!AppHelpers.isValidPhone(normalized)) {
+      return 'To\'g\'ri telefon raqami kiriting (masalan: +998901234567)';
+    }
+    try {
+      final res = await SupabaseService.client.auth.signInWithPassword(
+        phone: normalized,
+        password: password.trim(),
+      );
+
+      if (res.user == null) {
+        return 'Telefon raqami yoki parol noto\'g\'ri';
+      }
+
+      _user = res.user;
+      CacheService.instance.activateUser(_user?.id);
+      await OfflineQueueService.instance.activateUser(_user?.id);
+      await loadProfile();
+      return null;
+    } catch (e) {
+      final raw = e is AuthException
+          ? e.message.toLowerCase()
+          : e.toString().toLowerCase();
+      if (raw.contains('invalid login credentials') ||
+          raw.contains('invalid_credentials')) {
+        return 'Telefon raqami yoki parol noto\'g\'ri';
+      }
+      return formatAuthError(
+        e,
+        fallback: 'Tizimga kirishda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<({String? error, bool needsVerification})> signUpWithPhone(
+    String phone,
+    String password,
+    String name,
+  ) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    if (!AppHelpers.isValidPhone(normalized)) {
+      return (
+        error: 'To\'g\'ri telefon raqami kiriting (masalan: +998901234567)',
+        needsVerification: false,
+      );
+    }
+    try {
+      final res = await SupabaseService.client.auth.signUp(
+        phone: normalized,
+        password: password.trim(),
+        data: {
+          'display_name': name.trim().isEmpty
+              ? AppHelpers.formatPhoneDisplay(normalized)
+              : name.trim(),
+          'phone_number': normalized,
+        },
+      );
+
+      if (res.session == null) {
+        return (error: null, needsVerification: true);
+      }
+
+      _user = res.user;
+      CacheService.instance.activateUser(_user?.id);
+      await OfflineQueueService.instance.activateUser(_user?.id);
+      if (_user != null) {
+        await loadProfile();
+      }
+      return (error: null, needsVerification: false);
+    } catch (e) {
+      return (
+        error: formatAuthError(
+          e,
+          fallback: 'Ro\'yxatdan o\'tishda xatolik yuz berdi',
+        ),
+        needsVerification: false,
+      );
+    }
+  }
+
+  Future<String?> verifyPhoneSignUpOtp({
+    required String phone,
+    required String token,
+  }) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    final cleanToken = token.trim();
+    if (cleanToken.length < 6) {
+      return 'SMS orqali kelgan 6 xonali kodni kiriting';
+    }
+    try {
+      final res = await SupabaseService.client.auth.verifyOTP(
+        phone: normalized,
+        token: cleanToken,
+        type: OtpType.sms,
+      );
+      _user = res.user ?? SupabaseService.currentUser;
+      CacheService.instance.activateUser(_user?.id);
+      await OfflineQueueService.instance.activateUser(_user?.id);
+      if (_user != null) {
+        await loadProfile();
+      }
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      return formatAuthError(
+        e,
+        fallback: 'SMS kodni tasdiqlashda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<String?> resendPhoneSignUpOtp(String phone) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    if (!AppHelpers.isValidPhone(normalized)) {
+      return 'To\'g\'ri telefon raqami kiriting';
+    }
+    try {
+      await SupabaseService.client.auth.resend(
+        type: OtpType.sms,
+        phone: normalized,
+      );
+      return null;
+    } catch (e) {
+      return formatAuthError(
+        e,
+        fallback: 'SMS kodni qayta yuborishda xatolik yuz berdi',
+      );
+    }
   }
 
   Future<String?> signIn(String email, String password) async {
@@ -218,6 +389,7 @@ class AuthProvider extends ChangeNotifier {
       await CacheService.instance.clearUserCache(userId: signingOutUserId);
       _user = null;
       _profile = null;
+      _isPasswordRecovery = false;
       CacheService.instance.activateUser(null);
       await OfflineQueueService.instance.activateUser(null);
       _isLoading = false;
@@ -255,6 +427,240 @@ class AuthProvider extends ChangeNotifier {
       await OfflineQueueService.instance.activateUser(null);
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<String?> sendPhonePasswordResetOtp(String phone) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    if (!AppHelpers.isValidPhone(normalized)) {
+      return 'To\'g\'ri telefon raqami kiriting (masalan: +998901234567)';
+    }
+    try {
+      await SupabaseService.client.auth.signInWithOtp(
+        phone: normalized,
+        shouldCreateUser: false,
+      );
+      return null;
+    } catch (e) {
+      return formatAuthError(
+        e,
+        fallback: 'SMS kodni yuborishda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<String?> verifyPhoneRecoveryAndResetPassword({
+    required String phone,
+    required String token,
+    required String newPassword,
+  }) async {
+    final normalized = AppHelpers.normalizePhone(phone);
+    final cleanToken = token.trim();
+    final cleanPassword = newPassword.trim();
+    if (!AppHelpers.isValidPhone(normalized)) {
+      return 'To\'g\'ri telefon raqami kiriting';
+    }
+    if (cleanToken.length < 6) {
+      return 'SMS orqali kelgan tasdiqlash kodini to\'liq kiriting';
+    }
+    if (cleanPassword.length < 8) {
+      return 'Yangi parol kamida 8 ta belgidan iborat bo\'lishi kerak';
+    }
+
+    bool otpVerified = false;
+    _isPasswordRecovery = true;
+    try {
+      await SupabaseService.client.auth.verifyOTP(
+        phone: normalized,
+        token: cleanToken,
+        type: OtpType.sms,
+      );
+      otpVerified = true;
+      await SupabaseService.client.auth.updateUser(
+        UserAttributes(password: cleanPassword),
+      );
+      _isPasswordRecovery = false;
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      if (!otpVerified) {
+        _isPasswordRecovery = false;
+      }
+      return formatAuthError(
+        e,
+        fallback: 'Parolni tiklashda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<String?> sendPasswordResetEmail(String email) async {
+    final cleanEmail = email.trim();
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@')) {
+      return 'Yaroqli email manzil kiriting';
+    }
+    try {
+      await SupabaseService.client.auth.resetPasswordForEmail(
+        cleanEmail,
+        redirectTo: 'vocabify://reset-callback',
+      );
+      return null;
+    } catch (e) {
+      return formatAuthError(
+        e,
+        fallback: 'Parolni tiklash xatini yuborishda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<String?> verifyRecoveryOtpAndResetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    final cleanEmail = email.trim();
+    final cleanToken = token.trim();
+    final cleanPassword = newPassword.trim();
+    if (cleanToken.length < 6) {
+      return 'Emailga kelgan tasdiqlash kodini to\'liq kiriting';
+    }
+    if (cleanPassword.length < 8) {
+      return 'Yangi parol kamida 8 ta belgidan iborat bo\'lishi kerak';
+    }
+
+    bool otpVerified = false;
+    _isPasswordRecovery = true;
+    try {
+      await SupabaseService.client.auth.verifyOTP(
+        email: cleanEmail,
+        token: cleanToken,
+        type: OtpType.recovery,
+      );
+      otpVerified = true;
+      await SupabaseService.client.auth.updateUser(
+        UserAttributes(password: cleanPassword),
+      );
+      _isPasswordRecovery = false;
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      if (!otpVerified) {
+        _isPasswordRecovery = false;
+      }
+      return formatAuthError(
+        e,
+        fallback: 'Parolni tiklashda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<String?> completePasswordRecovery(String newPassword) async {
+    final cleanPassword = newPassword.trim();
+    if (cleanPassword.length < 8) {
+      return 'Yangi parol kamida 8 ta belgidan iborat bo\'lishi kerak';
+    }
+    try {
+      await SupabaseService.client.auth.updateUser(
+        UserAttributes(password: cleanPassword),
+      );
+      _isPasswordRecovery = false;
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      return formatAuthError(
+        e,
+        fallback: 'Yangi parolni saqlashda xatolik yuz berdi',
+      );
+    }
+  }
+
+  Future<void> cancelPasswordRecovery() async {
+    _isPasswordRecovery = false;
+    await signOut();
+  }
+
+  Future<String?> updateUsername(String newUsername) async {
+    final clean = newUsername.trim();
+    if (clean.length < 2) {
+      return 'Username kamida 2 ta belgidan iborat bo\'lishi kerak';
+    }
+    if (_user == null) {
+      return 'Tizimga kirilmagan';
+    }
+
+    final currentGoal = _profile?.dailyGoal ?? 20;
+    final ok = await updateProfile(displayName: clean, dailyGoal: currentGoal);
+    if (!ok) {
+      return 'Username ni saqlashda xatolik yuz berdi';
+    }
+
+    try {
+      final res = await SupabaseService.client.auth.updateUser(
+        UserAttributes(data: {'display_name': clean}),
+      );
+      if (res.user != null) {
+        _user = res.user;
+        if (!_isDisposed) {
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Auth metadata display_name sync skipped: $e');
+    }
+    return null;
+  }
+
+  Future<String?> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final email = _user?.email;
+    final phone = _user?.phone;
+    final hasEmail = email != null && email.isNotEmpty;
+    final hasPhone = phone != null && phone.isNotEmpty;
+    if (!hasEmail && !hasPhone) {
+      return 'Foydalanuvchi hisob ma\'lumotlari topilmadi';
+    }
+    if (newPassword.trim().length < 8) {
+      return 'Yangi parol kamida 8 ta belgidan iborat bo\'lishi kerak';
+    }
+    if (currentPassword.trim() == newPassword.trim()) {
+      return 'Yangi parol joriy paroldan farqli bo\'lishi kerak';
+    }
+
+    try {
+      if (hasEmail) {
+        await SupabaseService.client.auth.signInWithPassword(
+          email: email,
+          password: currentPassword.trim(),
+        );
+      } else {
+        await SupabaseService.client.auth.signInWithPassword(
+          phone: phone!,
+          password: currentPassword.trim(),
+        );
+      }
+      await SupabaseService.client.auth.updateUser(
+        UserAttributes(password: newPassword.trim()),
+      );
+      return null;
+    } catch (e) {
+      final raw = e is AuthException
+          ? e.message.toLowerCase()
+          : e.toString().toLowerCase();
+      if (raw.contains('invalid login credentials') ||
+          raw.contains('invalid_credentials')) {
+        return 'Joriy parol noto\'g\'ri';
+      }
+      return formatAuthError(
+        e,
+        fallback: 'Parolni o\'zgartirishda xatolik yuz berdi',
+      );
     }
   }
 

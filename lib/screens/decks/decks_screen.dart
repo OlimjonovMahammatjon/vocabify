@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../widgets/motion/app_motion.dart';
 import '../../models/deck_model.dart';
 import '../../models/card_model.dart';
 import '../../providers/auth_provider.dart';
@@ -408,10 +409,16 @@ class _DecksScreenState extends State<DecksScreen>
                       return _buildGlobalMixBanner(context, allCards, isDark);
                     }
                     final deck = decks[index - 2];
-                    return _buildDeckCard(context, deck);
+                    final card = _buildDeckCard(context, deck);
+                    return index < 6
+                        ? StaggeredEntrance(index: index, child: card)
+                        : card;
                   }
                   final deck = decks[index - 1];
-                  return _buildDeckCard(context, deck);
+                  final card = _buildDeckCard(context, deck);
+                  return index < 6
+                      ? StaggeredEntrance(index: index, child: card)
+                      : card;
                 },
               ),
             ),
@@ -419,33 +426,35 @@ class _DecksScreenState extends State<DecksScreen>
   }
 
   Widget _buildAiScanBanner(BuildContext context, bool isDark) {
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AiScanScreen()),
-        );
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDark
-                ? [const Color(0xFF1E3A5F), const Color(0xFF14243B)]
-                : [AppColors.brand, const Color(0xFF283B60)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+    return StaggeredEntrance(
+      index: 0,
+      child: PressScale(
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AiScanScreen()),
+            );
+          },
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.brand.withValues(alpha: isDark ? 0.3 : 0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF152238) : AppColors.brand,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark
+                    ? AppColors.darkBorder
+                    : Colors.white.withValues(alpha: 0.08),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        ),
         child: Row(
           children: [
             Container(
@@ -493,6 +502,8 @@ class _DecksScreenState extends State<DecksScreen>
           ],
         ),
       ),
+      ),
+      ),
     );
   }
 
@@ -501,7 +512,10 @@ class _DecksScreenState extends State<DecksScreen>
     List<CardModel> allCards,
     bool isDark,
   ) {
-    return InkWell(
+    return StaggeredEntrance(
+      index: 1,
+      child: PressScale(
+        child: InkWell(
       onTap: () => CustomStudyModal.show(
         context,
         cards: allCards,
@@ -582,6 +596,8 @@ class _DecksScreenState extends State<DecksScreen>
           ],
         ),
       ),
+      ),
+      ),
     );
   }
 
@@ -592,7 +608,8 @@ class _DecksScreenState extends State<DecksScreen>
         ? (AppColors.deckBgDark[deck.color] ?? AppColors.darkCard)
         : (AppColors.deckBgLight[deck.color] ?? AppColors.lightCard);
 
-    return InkWell(
+    return PressScale(
+      child: InkWell(
       onTap: () {
         Navigator.push(
           context,
@@ -674,6 +691,7 @@ class _DecksScreenState extends State<DecksScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }

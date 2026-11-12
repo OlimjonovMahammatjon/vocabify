@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../widgets/motion/app_motion.dart';
 import '../../models/card_model.dart';
 import '../../models/deck_model.dart';
 import '../../providers/quiz_provider.dart';
@@ -80,8 +81,10 @@ class QuizResultsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Score Summary Card
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+            StaggeredEntrance(
+              index: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(24),
@@ -112,8 +115,9 @@ class QuizResultsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    '$percentage%',
+                  AnimatedCountText(
+                    value: percentage,
+                    suffix: '%',
                     style: const TextStyle(
                       fontSize: 48,
                       fontWeight: FontWeight.bold,
@@ -197,11 +201,14 @@ class QuizResultsScreen extends StatelessWidget {
                   ),
                 ],
               ),
+              ),
             ),
             const SizedBox(height: 20),
 
             // Review Answers Card
-            Container(
+            StaggeredEntrance(
+              index: 1,
+              child: Container(
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkCard : Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -231,81 +238,22 @@ class QuizResultsScreen extends StatelessWidget {
                         ? AppColors.darkBorder
                         : AppColors.lightBorder,
                   ),
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: results.length,
-                    separatorBuilder: (context, index) => Divider(
-                      height: 1,
-                      color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder,
-                    ),
-                    itemBuilder: (context, i) {
-                      final item = results[i];
-                      final questionWord = direction == 'en-uz'
-                          ? item.card.word
-                          : item.card.translation;
-                      final correctAnswer = direction == 'en-uz'
-                          ? item.card.translation
-                          : item.card.word;
-
-                      return Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              item.isCorrect
-                                  ? Icons.check_circle_rounded
-                                  : Icons.cancel_rounded,
-                              color: item.isCorrect
-                                  ? AppColors.success
-                                  : AppColors.destructive,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${i + 1}. $questionWord',
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '✓ $correctAnswer',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: AppColors.success,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  if (!item.isCorrect &&
-                                      item.selectedAnswer.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '✗ ${item.selectedAnswer}',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.destructive,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                  Column(
+                    children: [
+                      for (int i = 0; i < results.length; i++) ...[
+                        if (i > 0)
+                          Divider(
+                            height: 1,
+                            color: isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                          ),
+                        _buildResultRow(results[i], i),
+                      ],
+                    ],
                   ),
                 ],
+              ),
               ),
             ),
             const SizedBox(height: 20),
@@ -343,6 +291,62 @@ class QuizResultsScreen extends StatelessWidget {
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultRow(QuizResultItem item, int index) {
+    final questionWord =
+        direction == 'en-uz' ? item.card.word : item.card.translation;
+    final correctAnswer =
+        direction == 'en-uz' ? item.card.translation : item.card.word;
+
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            item.isCorrect ? Icons.check_circle_rounded : Icons.cancel_rounded,
+            color: item.isCorrect ? AppColors.success : AppColors.destructive,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${index + 1}. $questionWord',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '✓ $correctAnswer',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (!item.isCorrect && item.selectedAnswer.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '✗ ${item.selectedAnswer}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.destructive,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

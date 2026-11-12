@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/helpers.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation_screen.dart';
+import 'forgot_password_modal.dart';
+import 'phone_otp_modal.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -18,13 +21,16 @@ class _AuthScreenState extends State<AuthScreen>
   final _signInFormKey = GlobalKey<FormState>();
   final _signUpFormKey = GlobalKey<FormState>();
 
+  final _signInPhoneController = TextEditingController();
   final _signInEmailController = TextEditingController();
   final _signInPasswordController = TextEditingController();
 
   final _signUpNameController = TextEditingController();
+  final _signUpPhoneController = TextEditingController();
   final _signUpEmailController = TextEditingController();
   final _signUpPasswordController = TextEditingController();
 
+  bool _usePhoneAuth = true;
   bool _obscureSignInPass = true;
   bool _obscureSignUpPass = true;
   bool _isSubmitting = false;
@@ -44,9 +50,11 @@ class _AuthScreenState extends State<AuthScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _signInPhoneController.dispose();
     _signInEmailController.dispose();
     _signInPasswordController.dispose();
     _signUpNameController.dispose();
+    _signUpPhoneController.dispose();
     _signUpEmailController.dispose();
     _signUpPasswordController.dispose();
     super.dispose();
@@ -105,27 +113,240 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
+  void _showErrorFeedback(String error) {
+    setState(() => _errorMessage = error);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: AppColors.destructive,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  void _navigateToHome({String? successMessage}) {
+    if (successMessage != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+    );
+  }
+
   Future<void> _handleSignIn() {
     final auth = context.read<AuthProvider>();
     return _submitAuth(
       formKey: _signInFormKey,
-      action: () => auth.signIn(
-        _signInEmailController.text,
-        _signInPasswordController.text,
+      action: () => _usePhoneAuth
+          ? auth.signInWithPhone(
+              _signInPhoneController.text,
+              _signInPasswordController.text,
+            )
+          : auth.signIn(
+              _signInEmailController.text,
+              _signInPasswordController.text,
+            ),
+    );
+  }
+
+  Future<void> _handleSignUp() async {
+    final auth = context.read<AuthProvider>();
+    if (!_usePhoneAuth) {
+      await _submitAuth(
+        formKey: _signUpFormKey,
+        action: () => auth.signUp(
+          _signUpEmailController.text,
+          _signUpPasswordController.text,
+          _signUpNameController.text,
+        ),
+        successMessage: 'Xush kelibsiz! 🎉',
+      );
+      return;
+    }
+
+    if (!_signUpFormKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    final result = await auth.signUpWithPhone(
+      _signUpPhoneController.text,
+      _signUpPasswordController.text,
+      _signUpNameController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (result.error != null) {
+      _showErrorFeedback(result.error!);
+      return;
+    }
+
+    if (result.needsVerification) {
+      final verified = await showPhoneOtpVerifyModal(
+        context,
+        phone: AppHelpers.normalizePhone(_signUpPhoneController.text),
+      );
+      if (!mounted || !verified) return;
+    }
+
+    _navigateToHome(successMessage: 'Xush kelibsiz! 🎉');
+  }
+
+  Widget _buildContactMethodSelector(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSecondary : AppColors.lightSecondary,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      child: Row(
+        children: [
+          _buildMethodPill(
+            label: 'Telefon',
+            icon: Icons.phone_outlined,
+            selected: _usePhoneAuth,
+            isDark: isDark,
+            onTap: () {
+              if (!_usePhoneAuth) {
+                setState(() {
+                  _usePhoneAuth = true;
+                  _errorMessage = null;
+                });
+              }
+            },
+          ),
+          _buildMethodPill(
+            label: 'Email',
+            icon: Icons.email_outlined,
+            selected: !_usePhoneAuth,
+            isDark: isDark,
+            onTap: () {
+              if (_usePhoneAuth) {
+                setState(() {
+                  _usePhoneAuth = false;
+                  _errorMessage = null;
+                });
+              }
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _handleSignUp() {
-    final auth = context.read<AuthProvider>();
-    return _submitAuth(
-      formKey: _signUpFormKey,
-      action: () => auth.signUp(
-        _signUpEmailController.text,
-        _signUpPasswordController.text,
-        _signUpNameController.text,
+  Widget _buildMethodPill({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    final activeText = isDark ? Colors.white : AppColors.lightText;
+    final mutedText = isDark
+        ? AppColors.darkTextMuted
+        : AppColors.lightTextMuted;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            color: selected
+                ? (isDark ? AppColors.darkCard : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15, color: selected ? activeText : mutedText),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? activeText : mutedText,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      successMessage: 'Xush kelibsiz! 🎉',
+    );
+  }
+
+  Widget _buildIdentifierField({
+    required TextEditingController phoneController,
+    required TextEditingController emailController,
+  }) {
+    if (_usePhoneAuth) {
+      return TextFormField(
+        key: ValueKey('phone_${phoneController.hashCode}'),
+        controller: phoneController,
+        keyboardType: TextInputType.phone,
+        onChanged: (_) => _clearError(),
+        decoration: const InputDecoration(
+          labelText: 'Telefon raqami',
+          hintText: '+998 90 123 45 67',
+          prefixIcon: Icon(Icons.phone_outlined, size: 20),
+        ),
+        validator: (v) {
+          if (v == null || v.trim().isEmpty) {
+            return 'Telefon raqamini kiriting';
+          }
+          if (!AppHelpers.isValidPhone(v)) {
+            return 'To\'g\'ri raqam kiriting (+998901234567)';
+          }
+          return null;
+        },
+      );
+    }
+
+    return TextFormField(
+      key: ValueKey('email_${emailController.hashCode}'),
+      controller: emailController,
+      keyboardType: TextInputType.emailAddress,
+      onChanged: (_) => _clearError(),
+      decoration: const InputDecoration(
+        labelText: 'Email',
+        hintText: 'siz@example.com',
+        prefixIcon: Icon(Icons.email_outlined, size: 20),
+      ),
+      validator: (v) {
+        if (v == null || v.trim().isEmpty) {
+          return 'Email kiriting';
+        }
+        if (!v.contains('@')) {
+          return 'Yaroqli email kiriting';
+        }
+        return null;
+      },
     );
   }
 
@@ -248,7 +469,9 @@ class _AuthScreenState extends State<AuthScreen>
                             ],
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
+                        _buildContactMethodSelector(isDark),
+                        const SizedBox(height: 14),
 
                         if (_errorMessage != null) ...[
                           Container(
@@ -295,7 +518,7 @@ class _AuthScreenState extends State<AuthScreen>
 
                         // Form Tab Views
                         SizedBox(
-                          height: 288,
+                          height: 316,
                           child: TabBarView(
                             controller: _tabController,
                             children: [
@@ -362,6 +585,37 @@ class _AuthScreenState extends State<AuthScreen>
                                         }
                                         return null;
                                       },
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _isSubmitting
+                                            ? null
+                                            : () => showForgotPasswordModal(
+                                                context,
+                                                initialEmail:
+                                                    _signInEmailController.text,
+                                              ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 4,
+                                            vertical: 6,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: Text(
+                                          'Parolni unutdingizmi?',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark
+                                                ? AppColors.brandDark
+                                                : AppColors.brand,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                     const Spacer(),
                                     ElevatedButton(

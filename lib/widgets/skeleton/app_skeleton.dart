@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/app_colors.dart';
 
-/// High-performance GPU-accelerated Shimmer Effect
+/// Lightweight GPU-friendly pulse skeleton effect (no ShaderMask or gradients).
 class AppShimmer extends StatefulWidget {
   final Widget child;
   final bool enabled;
@@ -16,7 +16,7 @@ class AppShimmer extends StatefulWidget {
     this.enabled = true,
     this.baseColor,
     this.highlightColor,
-    this.duration = const Duration(milliseconds: 1400),
+    this.duration = const Duration(milliseconds: 950),
   });
 
   @override
@@ -26,12 +26,16 @@ class AppShimmer extends StatefulWidget {
 class _AppShimmerState extends State<AppShimmer>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late Animation<double> _opacity;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..repeat();
+      ..repeat(reverse: true);
+    _opacity = Tween<double>(begin: 0.45, end: 0.95).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -44,32 +48,11 @@ class _AppShimmerState extends State<AppShimmer>
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final base =
-        widget.baseColor ??
-        (isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0));
-    final highlight =
-        widget.highlightColor ??
-        (isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC));
-
-    return AnimatedBuilder(
-      animation: _controller,
-      child: widget.child,
-      builder: (context, child) {
-        final progress = _controller.value;
-        return ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (bounds) {
-            return LinearGradient(
-              begin: Alignment(-1.5 + (progress * 3.0), -0.3),
-              end: Alignment(-0.5 + (progress * 3.0), 0.3),
-              colors: [base, highlight, base],
-              stops: const [0.0, 0.5, 1.0],
-            ).createShader(bounds);
-          },
-          child: child,
-        );
-      },
+    return RepaintBoundary(
+      child: FadeTransition(
+        opacity: _opacity,
+        child: widget.child,
+      ),
     );
   }
 }

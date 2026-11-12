@@ -730,27 +730,20 @@ class _StatsScreenState extends State<StatsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: hasReviewedToday
-              ? [const Color(0xFFF97316), const Color(0xFFEA580C)]
-              : [
-                  isDark ? AppColors.darkCard : Colors.white,
-                  isDark ? AppColors.darkSecondary : const Color(0xFFF1F5F9),
-                ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: hasReviewedToday
+            ? const Color(0xFFD97706)
+            : (isDark ? AppColors.darkCard : Colors.white),
         borderRadius: BorderRadius.circular(20),
-        border: hasReviewedToday
-            ? null
-            : Border.all(
-                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              ),
+        border: Border.all(
+          color: hasReviewedToday
+              ? const Color(0xFFB45309)
+              : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        ),
         boxShadow: hasReviewedToday
             ? [
                 BoxShadow(
-                  color: const Color(0xFFF97316).withValues(alpha: 0.35),
-                  blurRadius: 12,
+                  color: const Color(0xFFD97706).withValues(alpha: 0.22),
+                  blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ]
